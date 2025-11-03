@@ -7,10 +7,12 @@ export default function RootLayout() {
   return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
-        <Stack>
-          <Stack.Screen name="index" options={{ title: 'Pildhora' }} />
-          <Stack.Screen name="patient/home" options={{ title: 'Patient Home' }} />
-          <Stack.Screen name="caregiver/dashboard" options={{ title: 'Caregiver Dashboard' }} />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="auth/login" />
+          <Stack.Screen name="auth/signup" />
+          <Stack.Screen name="patient/home" />
+          <Stack.Screen name="caregiver/dashboard" />
         </Stack>
       </PersistGate>
     </Provider>
