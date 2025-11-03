@@ -1,4 +1,4 @@
-import { Text, View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text, View, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 
 export default function Index() {
@@ -14,67 +14,25 @@ export default function Index() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome to Pildhora</Text>
-      <Text style={styles.subtitle}>Smart Pillbox Management</Text>
+    <View className="flex-1 justify-center items-center p-5 bg-background">
+      <Text className="text-3xl font-bold text-text mb-2">Welcome to Pildhora</Text>
+      <Text className="text-base text-textSecondary mb-10">Smart Pillbox Management</Text>
 
-      <View style={styles.buttonContainer}>
+      <View className="w-full max-w-xs">
         <TouchableOpacity
-          style={[styles.button, styles.patientButton]}
+          className="bg-success p-4 rounded-xl mb-4 items-center"
           onPress={() => handleRoleSelect('patient')}
         >
-          <Text style={styles.buttonText}>I'm a Patient</Text>
+          <Text className="text-white text-lg font-semibold">I'm a Patient</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.button, styles.caregiverButton]}
+          className="bg-primary p-4 rounded-xl mb-4 items-center"
           onPress={() => handleRoleSelect('caregiver')}
         >
-          <Text style={styles.buttonText}>I'm a Caregiver</Text>
+          <Text className="text-white text-lg font-semibold">I'm a Caregiver</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#F2F2F7',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1C1C1E',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#8E8E93',
-    marginBottom: 40,
-  },
-  buttonContainer: {
-    width: '100%',
-    maxWidth: 300,
-  },
-  button: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  patientButton: {
-    backgroundColor: '#34C759',
-  },
-  caregiverButton: {
-    backgroundColor: '#007AFF',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-});

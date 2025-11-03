@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "plugins": ["expo-router"],
+    "plugins": ["expo-router", "nativewind"],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",

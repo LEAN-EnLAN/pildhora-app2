@@ -15,6 +15,7 @@
     "expo-router": "^6.0.14",
     "expo-status-bar": "~3.0.8",
     "firebase": "^12.5.0",
+    "nativewind": "^4.0.1",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-ble-plx": "^3.5.0",
@@ -23,7 +24,8 @@
     "react-native-paper": "^5.14.5",
     "react-native-vector-icons": "^10.3.0",
     "react-redux": "^9.2.0",
-    "redux-persist": "^6.0.0"
+    "redux-persist": "^6.0.0",
+    "tailwindcss": "^3.3.2"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
