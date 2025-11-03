@@ -3,19 +3,23 @@ import { persistStore, persistReducer } from 'redux-persist';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { combineReducers } from 'redux';
 
-// Import slices here as we create them
-// import authReducer from './slices/authSlice';
-// import medicationsReducer from './slices/medicationsSlice';
+// Import slices
+import authReducer from './slices/authSlice';
+import medicationsReducer from './slices/medicationsSlice';
+import tasksReducer from './slices/tasksSlice';
+import bleReducer from './slices/bleSlice';
 
 const persistConfig = {
   key: 'root',
   storage: AsyncStorage,
-  whitelist: ['auth', 'medications'], // Only persist these slices
+  whitelist: ['auth', 'medications', 'tasks'], // Persist these slices, not BLE state
 };
 
 const rootReducer = combineReducers({
-  // auth: authReducer,
-  // medications: medicationsReducer,
+  auth: authReducer,
+  medications: medicationsReducer,
+  tasks: tasksReducer,
+  ble: bleReducer,
 });
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
@@ -25,7 +29,7 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE'],
+        ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE', 'persist/REGISTER'],
       },
     }),
 });
