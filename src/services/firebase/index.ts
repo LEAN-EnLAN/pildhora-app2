@@ -3,15 +3,22 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 
-// Firebase config - replace with your actual config from Firebase Console
-const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
-};
+// Carga y validación de variables de entorno (Expo SDK 49+ / 54)
+// Nota: Las variables deben comenzar con "EXPO_PUBLIC_" para estar disponibles en tiempo de ejecución.
+const raw = process.env.EXPO_PUBLIC_FIREBASE_CONFIG;
+if (!raw) {
+  throw new Error(
+    '[Firebase] Falta EXPO_PUBLIC_FIREBASE_CONFIG. ' +
+    'Copia el bloque completo desde Firebase Console → Configuración del proyecto → SDK snippet y pégalo en .env'
+  );
+}
+
+let firebaseConfig;
+try {
+  firebaseConfig = JSON.parse(raw);
+} catch (e) {
+  throw new Error('[Firebase] EXPO_PUBLIC_FIREBASE_CONFIG no es un JSON válido. Asegúrate de copiar el bloque completo.');
+}
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

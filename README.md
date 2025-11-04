@@ -40,9 +40,44 @@ A comprehensive smart pillbox management system with separate interfaces for eld
    ```
 
 3. **Environment Setup**
-   - Copy `.env.example` to `.env`
-   - Add your Firebase configuration
-   - Add Google AI API keys
+   - Copia `.env.example` a `.env`
+   - Rellena las variables de Firebase con los valores de tu proyecto:
+     ```env
+     EXPO_PUBLIC_FIREBASE_API_KEY=...
+     EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+     EXPO_PUBLIC_FIREBASE_PROJECT_ID=...
+     EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+     EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+     EXPO_PUBLIC_FIREBASE_APP_ID=...
+     ```
+   - Importante: las variables deben empezar con `EXPO_PUBLIC_` para que Expo las exponga en tiempo de ejecución (no usar secretos aquí).
+   - Opciones para cargar el `.env`:
+     - Simple: exporta las variables en tu terminal antes de iniciar Expo (PowerShell):
+       ```powershell
+       $env:EXPO_PUBLIC_FIREBASE_API_KEY="..."
+       $env:EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN="..."
+       $env:EXPO_PUBLIC_FIREBASE_PROJECT_ID="..."
+       $env:EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET="..."
+       $env:EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="..."
+       $env:EXPO_PUBLIC_FIREBASE_APP_ID="..."
+       npm start
+       ```
+     - Conveniente: instala `dotenv-cli` y usa el archivo `.env` automáticamente (Windows/macOS/Linux):
+       ```bash
+       npm install --save-dev dotenv-cli
+       ```
+       Luego actualiza tus scripts a:
+       ```json
+       {
+         "scripts": {
+           "start": "dotenv -e .env -- expo start",
+           "android": "dotenv -e .env -- expo start --android",
+           "ios": "dotenv -e .env -- expo start --ios",
+           "web": "dotenv -e .env -- expo start --web"
+         }
+       }
+       ```
+   - Añade también tus claves de Google AI si las usas.
 
 4. **Development**
    ```bash

@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "start": "dotenv -e .env -- expo start",
+    "android": "dotenv -e .env -- expo start --android",
+    "ios": "dotenv -e .env -- expo start --ios",
+    "web": "dotenv -e .env -- expo start --web"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -15,20 +15,24 @@
     "expo-router": "^6.0.14",
     "expo-status-bar": "~3.0.8",
     "firebase": "^12.5.0",
-    "nativewind": "^4.0.1",
+    "nativewind": "^2.0.11",
     "react": "19.1.0",
+    "react-dom": "19.1.0",
     "react-native": "0.81.5",
     "react-native-ble-plx": "^3.5.0",
     "react-native-chart-kit": "^6.12.0",
     "react-native-elements": "^3.4.3",
     "react-native-paper": "^5.14.5",
     "react-native-vector-icons": "^10.3.0",
+    "react-native-web": "^0.21.0",
     "react-redux": "^9.2.0",
     "redux-persist": "^6.0.0",
     "tailwindcss": "^3.3.2"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "babel-preset-expo": "^54.0.6",
+    "dotenv-cli": "^11.0.0",
     "typescript": "~5.9.2"
   },
   "private": true
