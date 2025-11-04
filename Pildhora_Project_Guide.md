@@ -223,7 +223,7 @@ yarn android  # or yarn ios
 - Offline functionality for 7 days
 
 ### Battery & Resource Usage
-- BLE scanning optimization
+- Wifi scanning optimization
 - Background task management
 - Memory leak prevention
 - Efficient image loading
@@ -231,7 +231,7 @@ yarn android  # or yarn ios
 ## Risk Mitigation
 
 ### Technical Risks
-- BLE connectivity issues → Fallback to WiFi
+- Wifi connectivity issues → Fallback to Offline
 - Firebase quota limits → Implement caching
 - AI API failures → Graceful degradation
 - Platform-specific bugs → Extensive device testing
