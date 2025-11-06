@@ -6,6 +6,18 @@ import { signIn, logout } from '../../src/store/slices/authSlice';
 import { RootState, AppDispatch } from '../../src/store';
 import { auth } from '../../src/services/firebase';
 
+// Disable shadow styles on web to avoid RN Web generating boxShadow CSS
+const commonShadow = Platform.select({
+  web: {},
+  default: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+});
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -33,11 +45,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    ...commonShadow,
   },
   logoText: {
     color: 'white',
@@ -73,11 +81,16 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: 'white',
     fontSize: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    ...Platform.select({
+      web: {},
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
+      },
+    }),
   },
   passwordContainer: {
     marginBottom: 24,
@@ -88,11 +101,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    ...commonShadow,
   },
   signInButtonText: {
     color: 'white',

@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  FlatList, 
-  StyleSheet, 
+import {
+  Text,
+  View,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
   Alert,
   RefreshControl,
-  ActivityIndicator 
+  ActivityIndicator
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -24,30 +24,30 @@ import { Patient, PatientWithDevice, Task, DoseSegment } from '../../src/types';
 
 // Static default data for immediate rendering
 const STATIC_PATIENTS: Patient[] = [
-  { 
-    id: 'patient-1', 
-    name: 'John Doe', 
+  {
+    id: 'patient-1',
+    name: 'John Doe',
     email: 'john@example.com',
     caregiverId: 'caregiver-1',
     createdAt: new Date(),
-    adherence: 85, 
-    lastTaken: '2 hours ago' 
+    adherence: 85,
+    lastTaken: '2 hours ago'
   },
-  { 
-    id: 'patient-2', 
-    name: 'Jane Smith', 
+  {
+    id: 'patient-2',
+    name: 'Jane Smith',
     email: 'jane@example.com',
     caregiverId: 'caregiver-1',
     createdAt: new Date(),
-    adherence: 92, 
-    lastTaken: '30 minutes ago' 
+    adherence: 92,
+    lastTaken: '30 minutes ago'
   },
 ];
 
 const STATIC_TASKS: Task[] = [
-  { 
-    id: 'task-1', 
-    title: 'Refill prescription', 
+  {
+    id: 'task-1',
+    title: 'Refill prescription',
     description: 'Contact pharmacy for refill',
     patientId: 'patient-1',
     caregiverId: 'caregiver-1',
@@ -55,9 +55,9 @@ const STATIC_TASKS: Task[] = [
     dueDate: new Date(Date.now() + 86400000), // Tomorrow
     createdAt: new Date()
   },
-  { 
-    id: 'task-2', 
-    title: 'Schedule doctor visit', 
+  {
+    id: 'task-2',
+    title: 'Schedule doctor visit',
     description: 'Annual checkup appointment',
     patientId: 'patient-2',
     caregiverId: 'caregiver-1',
@@ -71,11 +71,11 @@ const STATIC_TASKS: Task[] = [
 const generateMockDoseSegments = (adherence: number): DoseSegment[] => {
   const segments: DoseSegment[] = [];
   const hoursPerDose = 24 / 4; // 4 doses per day
-  
+
   for (let i = 0; i < 4; i++) {
     const startHour = i * hoursPerDose;
     const endHour = (i + 1) * hoursPerDose;
-    
+
     // Determine status based on adherence percentage
     let status: DoseSegment['status'] = 'PENDING';
     if (Math.random() * 100 < adherence) {
@@ -83,10 +83,10 @@ const generateMockDoseSegments = (adherence: number): DoseSegment[] => {
     } else if (Math.random() > 0.5) {
       status = 'DOSE_MISSED';
     }
-    
+
     segments.push({ startHour, endHour, status });
   }
-  
+
   return segments;
 };
 
@@ -363,14 +363,14 @@ export default function CaregiverDashboard() {
     const enhancedPatients = patients.map((patient: Patient) => {
       // Generate mock dose segments based on adherence
       const doseSegments = generateMockDoseSegments(patient.adherence || 0);
-      
+
       return {
         ...patient,
         deviceState: patient.deviceId ? deviceState : undefined,
         doseSegments,
       } as PatientWithDevice;
     });
-    
+
     setPatientsWithDevices(enhancedPatients);
   }, [patients, deviceState]);
 
@@ -380,7 +380,7 @@ export default function CaregiverDashboard() {
     if (firstPatientWithDevice?.deviceId && !listening) {
       dispatch(startDeviceListener(firstPatientWithDevice.deviceId));
     }
-    
+
     return () => {
       if (listening) {
         dispatch(stopDeviceListener());
@@ -395,7 +395,7 @@ export default function CaregiverDashboard() {
   };
 
   const renderPatientItem = ({ item }: { item: PatientWithDevice }) => (
-    <View 
+    <View
       style={styles.patientItem}
       accessible={true}
       accessibilityLabel={`Patient: ${item.name}, Adherence: ${item.adherence}%`}
@@ -408,21 +408,21 @@ export default function CaregiverDashboard() {
           </Text>
         </View>
         <View style={[
-            styles.adherenceBadge,
-            (item.adherence || 0) > 80 ? styles.goodAdherence : styles.warningAdherence
-          ]}>
+          styles.adherenceBadge,
+          (item.adherence || 0) > 80 ? styles.goodAdherence : styles.warningAdherence
+        ]}>
           <Text style={styles.adherenceText}>{item.adherence}%</Text>
         </View>
       </View>
-      
+
       {/* DoseRing visualization */}
       <View style={styles.doseRingContainer}>
-        <DoseRing 
+        <DoseRing
           segments={item.doseSegments || []}
           accessibilityLabel={`Dose adherence visualization for ${item.name}`}
         />
       </View>
-      
+
       {/* Device status */}
       {item.deviceState && (
         <View style={styles.deviceStatusContainer}>
@@ -442,7 +442,7 @@ export default function CaregiverDashboard() {
   );
 
   const renderTaskItem = ({ item }: { item: Task }) => (
-    <View 
+    <View
       style={styles.taskItem}
       accessible={true}
       accessibilityLabel={`Task: ${item.title} for patient ${item.patientId}, Status: ${item.completed ? 'Completed' : 'Pending'}`}
@@ -454,9 +454,9 @@ export default function CaregiverDashboard() {
         </Text>
       </View>
       <View style={[
-          styles.adherenceBadge,
-          item.completed ? styles.completedBadge : styles.pendingBadge
-        ]}>
+        styles.adherenceBadge,
+        item.completed ? styles.completedBadge : styles.pendingBadge
+      ]}>
         <Text style={styles.adherenceText}>
           {item.completed ? 'Done' : 'Pending'}
         </Text>
@@ -554,7 +554,7 @@ export default function CaregiverDashboard() {
           </View>
 
           <View style={styles.buttonContainer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.button, styles.leftButton]}
               accessible={true}
               accessibilityLabel="Add medication"
@@ -562,7 +562,7 @@ export default function CaregiverDashboard() {
             >
               <Text style={styles.buttonText}>Add Medication</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.button, styles.rightButton]}
               accessible={true}
               accessibilityLabel="Generate report"
@@ -572,8 +572,8 @@ export default function CaregiverDashboard() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity 
-            style={styles.backButton} 
+          <TouchableOpacity
+            style={styles.backButton}
             onPress={async () => {
               await dispatch(logout());
               router.replace('/');

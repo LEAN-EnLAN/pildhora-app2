@@ -3,6 +3,8 @@ module.exports = function (api) {
   return {
     presets: ["babel-preset-expo"],
     plugins: [
+      // NativeWind for className-based styling
+      'nativewind/babel',
       // Add module resolver plugin to handle import aliases
       [
         'module-resolver',
@@ -14,6 +16,8 @@ module.exports = function (api) {
           },
         },
       ],
+      // Reanimated plugin must be listed last
+      'react-native-reanimated/plugin',
     ],
   };
 };

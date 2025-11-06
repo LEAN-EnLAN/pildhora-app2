@@ -48,6 +48,7 @@ const styles = StyleSheet.create({
   emergencyBtn: { backgroundColor: '#FF3B30' },
   logoutBtn: { backgroundColor: '#8E8E93' },
   headerBtnText: { color: 'white', fontWeight: '700' },
+  medicationsBtn: { backgroundColor: '#34C759' },
   section: {
     padding: 16,
   },
@@ -133,6 +134,9 @@ export default function PatientHome() {
             </TouchableOpacity>
             <TouchableOpacity style={[styles.headerBtn, styles.historyBtn]} onPress={handleHistory}>
               <Text style={styles.headerBtnText}>VER HISTORIAL</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.headerBtn, styles.medicationsBtn]} onPress={() => router.push('/patient/medications')}>
+              <Text style={styles.headerBtnText}>MIS MEDICAMENTOS</Text>
             </TouchableOpacity>
           </View>
         </View>

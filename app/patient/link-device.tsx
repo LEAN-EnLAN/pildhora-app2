@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { ColorPicker, fromHsv } from 'react-native-color-picker';
+import ColorPickerScaffold from '../../src/components/ColorPickerScaffold';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../src/store';
 import { linkDeviceToUser, unlinkDeviceFromUser, checkDevelopmentRuleStatus } from '../../src/services/deviceLinking';
 import { rdb, db } from '../../src/services/firebase';
-import { ref, get, set } from 'firebase/database';
-import { collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, get } from 'firebase/database';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 
 const styles = StyleSheet.create({
@@ -68,7 +68,7 @@ export default function LinkDeviceScreen() {
           const snap = await get(ref(rdb, `users/${userId}/devices`));
           const val = snap.val() || {};
           ids = Object.keys(val);
-        } catch {}
+        } catch { }
       }
       setLinkedDevices(ids);
 
@@ -128,14 +128,14 @@ export default function LinkDeviceScreen() {
   const handleLink = async () => {
     console.log('[DEBUG] handleLink called');
     setError(null);
-    
+
     // Log Redux state
     console.log('[DEBUG] Redux auth state:', {
       userId,
       isAuthenticated: !!userId,
       deviceId: deviceId.trim()
     });
-    
+
     if (!userId) {
       console.error('[DEBUG] No userId in Redux state');
       setError('Debes iniciar sesión para enlazar un dispositivo.');
@@ -146,7 +146,7 @@ export default function LinkDeviceScreen() {
       setError('Ingresa un Device ID válido.');
       return;
     }
-    
+
     try {
       console.log('[DEBUG] Starting device linking process...');
       setLoading(true);
@@ -215,11 +215,11 @@ export default function LinkDeviceScreen() {
   };
 
   const hexToRgb = (hex: string): [number, number, number] => {
-    const clean = hex.replace('#','');
-    const r = parseInt(clean.substring(0,2), 16);
-    const g = parseInt(clean.substring(2,4), 16);
-    const b = parseInt(clean.substring(4,6), 16);
-    return [r,g,b];
+    const clean = hex.replace('#', '');
+    const r = parseInt(clean.substring(0, 2), 16);
+    const g = parseInt(clean.substring(2, 4), 16);
+    const b = parseInt(clean.substring(4, 6), 16);
+    return [r, g, b];
   };
 
   const saveDeviceConfig = async (id: string) => {
@@ -293,7 +293,7 @@ export default function LinkDeviceScreen() {
                   <View>
                     <Text style={styles.infoText}>Modo de alarma</Text>
                     <View style={styles.chipRow}>
-                      {['off','sound','led','both'].map((mode) => (
+                      {['off', 'sound', 'led', 'both'].map((mode) => (
                         <TouchableOpacity
                           key={mode}
                           style={[styles.chip, stats?.alarmMode === mode ? styles.chipActive : null]}
@@ -327,13 +327,12 @@ export default function LinkDeviceScreen() {
                       <Text style={styles.infoText}>Color LED</Text>
                       <View style={[styles.swatch, { backgroundColor: colorHex }]} />
                     </View>
-                    <ColorPicker
-                      oldColor={colorHex}
-                      onColorChange={(c) => {
-                        const hex = fromHsv(c);
+                    <ColorPickerScaffold
+                      value={colorHex}
+                      onCompleteJS={({ hex }) => {
                         setColor(id, hexToRgb(hex));
                       }}
-                      style={{ height: 220, marginTop: 8 }}
+                      style={{ marginTop: 8 }}
                     />
                   </View>
                   <View style={styles.statsRow}>

@@ -59,7 +59,7 @@ try {
   });
 } catch (error: any) {
   console.error('[Firebase] Failed to initialize Firebase:', error);
-  
+
   // Check for common network/DNS issues
   if (error.message.includes('fetch') || error.message.includes('network')) {
     const enableDiagnostics = process.env.EXPO_PUBLIC_ENABLE_NETWORK_DIAGNOSTICS === 'true';
@@ -68,13 +68,13 @@ try {
         console.error('[Firebase] Detailed network diagnosis:', issues);
       });
     }
-    
+
     throw new Error(
       '[Firebase] Network error detected. This might be due to DNS resolution issues. ' +
       'Try changing your DNS servers to 8.8.8.8 and 8.8.4.4 (Google DNS) or 1.1.1.1 (Cloudflare DNS).'
     );
   }
-  
+
   throw error;
 }
 

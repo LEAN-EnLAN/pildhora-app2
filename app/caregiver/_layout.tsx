@@ -15,7 +15,7 @@ export default function CaregiverLayout() {
   }, [isAuthenticated, user?.role]);
 
   return (
-    <Stack>
+    <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="dashboard" options={{ title: 'Caregiver Dashboard' }} />
     </Stack>
   );

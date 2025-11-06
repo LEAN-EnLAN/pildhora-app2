@@ -1,9 +1,21 @@
 import { useEffect } from 'react';
-import { Text, View, TouchableOpacity, ActivityIndicator, Image, StyleSheet } from 'react-native';
+import { Text, View, TouchableOpacity, ActivityIndicator, Image, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../src/store';
 import { checkAuthState } from '../src/store/slices/authSlice';
+
+// Avoid React Native Web generating boxShadow CSS by removing shadow props on web
+const commonShadow = Platform.select({
+  web: {},
+  default: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -25,11 +37,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    ...commonShadow,
   },
   logoText: {
     color: 'white',
@@ -60,11 +68,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    ...commonShadow,
   },
   caregiverButton: {
     backgroundColor: '#34C759',
@@ -72,11 +76,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    ...commonShadow,
   },
   buttonText: {
     color: 'white',
