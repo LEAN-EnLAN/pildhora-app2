@@ -57,7 +57,7 @@ export default function PatientHome() {
     if (patientId) dispatch(fetchMedications(patientId));
   }, [patientId]);
 
-  // Build dose ring segments from today’s scheduled times (1-hour arcs)
+  // Build dose ring segments from today's scheduled times (1-hour arcs)
   const doseSegments: DoseSegment[] = useMemo(() => {
     const todays = medications.filter(isScheduledToday);
     const segments: DoseSegment[] = [];
@@ -183,16 +183,18 @@ export default function PatientHome() {
       scheduledDate.setHours(hh, mm, 0, 0);
 
       const db = await getDbInstance();
-      await addDoc(collection(db, 'intakeRecords'), {
-        medicationName: upcoming.med.name,
-        dosage: upcoming.med.dosage,
-        scheduledTime: scheduledDate,
-        status: IntakeStatus.TAKEN,
-        patientId,
-        takenAt: new Date(),
-        // Optional linkage for future queries
-        medicationId: upcoming.med.id,
-      });
+      if (db) {
+        await addDoc(collection(db, 'intakeRecords'), {
+          medicationName: upcoming.med.name,
+          dosage: upcoming.med.dosage,
+          scheduledTime: scheduledDate,
+          status: IntakeStatus.TAKEN,
+          patientId,
+          takenAt: new Date(),
+          // Optional linkage for future queries
+          medicationId: upcoming.med.id,
+        });
+      }
 
       Alert.alert('Registrado', 'Se registró la toma de la medicación correctamente.');
     } catch (e) {
@@ -361,7 +363,7 @@ export default function PatientHome() {
         </View>
       </View>
 
-      {/* Today’s schedule list */}
+      {/* Today's schedule list */}
       <View className="p-4">
         <View className="flex-row justify-between items-center mb-2">
           <Text className="text-lg font-bold">Hoy</Text>
@@ -375,17 +377,13 @@ export default function PatientHome() {
         {loading ? (
           <Text className="text-gray-600">Cargando...</Text>
         ) : (
-          <FlatList
-            data={medications.filter(isScheduledToday)}
-            keyExtractor={(item) => item.id}
-            ItemSeparatorComponent={() => <View className="h-px bg-gray-200" />}
-            scrollEnabled={false}
-            renderItem={({ item }) => (
-              <View className="bg-white p-4 rounded-xl">
+          <View className="gap-3">
+            {medications.filter(isScheduledToday).map((item) => (
+              <View key={item.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
                 <View className="flex-row items-center justify-between">
-                  <View>
-                    <Text className="text-base font-semibold text-gray-900">{item.name}</Text>
-                    <Text className="text-gray-600">{item.dosage}</Text>
+                  <View className="flex-1">
+                    <Text className="text-base font-semibold text-gray-900 mb-1">{item.name}</Text>
+                    <Text className="text-gray-600 mb-1">{item.dosage}</Text>
                     {(() => {
                       const next = getNextTimeToday(item);
                       return next !== null ? (
@@ -394,14 +392,14 @@ export default function PatientHome() {
                     })()}
                   </View>
                   <Link href={`/patient/medications/${item.id}`} asChild>
-                    <TouchableOpacity className="px-3 py-2 rounded-lg bg-gray-800">
+                    <TouchableOpacity className="px-4 py-2 rounded-lg bg-gray-800 shadow-sm">
                       <Text className="text-white font-semibold">Abrir</Text>
                     </TouchableOpacity>
                   </Link>
                 </View>
               </View>
-            )}
-          />
+            ))}
+          </View>
         )}
       </View>
       </ScrollView>

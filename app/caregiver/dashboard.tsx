@@ -54,28 +54,7 @@ const STATIC_PATIENTS: Patient[] = [
   },
 ];
 
-const STATIC_TASKS: Task[] = [
-  {
-    id: 'task-1',
-    title: 'Refill prescription',
-    description: 'Contact pharmacy for refill',
-    patientId: 'patient-1',
-    caregiverId: 'caregiver-1',
-    completed: false,
-    dueDate: new Date(Date.now() + 86400000), // Tomorrow
-    createdAt: new Date()
-  },
-  {
-    id: 'task-2',
-    title: 'Schedule doctor visit',
-    description: 'Annual checkup appointment',
-    patientId: 'patient-2',
-    caregiverId: 'caregiver-1',
-    completed: true,
-    dueDate: new Date(Date.now() + 172800000), // Day after tomorrow
-    createdAt: new Date()
-  },
-];
+
 
 // Generate mock dose segments for demonstration
 const generateMockDoseSegments = (adherence: number): DoseSegment[] => {
@@ -117,7 +96,6 @@ export default function CaregiverDashboard() {
 
   // State for queries and initialization
   const [patientsQuery, setPatientsQuery] = useState<any>(null);
-  const [tasksQuery, setTasksQuery] = useState<any>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [initializationError, setInitializationError] = useState<Error | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -146,7 +124,7 @@ export default function CaregiverDashboard() {
         if (user) {
           console.log('[CaregiverDashboard] Creating queries for user:', user.id);
           
-          // Use the user's Firebase UID for queries
+          // Use user's Firebase UID for queries
           const patientsQ = query(
             collection(db, 'users'),
             where('role', '==', 'patient'),
@@ -155,14 +133,6 @@ export default function CaregiverDashboard() {
           );
           console.log('[CaregiverDashboard] Patients query created');
           setPatientsQuery(patientsQ);
-          
-          const tasksQ = query(
-            collection(db, 'tasks'),
-            where('caregiverId', '==', user.id),
-            orderBy('dueDate', 'asc')
-          );
-          console.log('[CaregiverDashboard] Tasks query created');
-          setTasksQuery(tasksQ);
         } else {
           console.warn('[CaregiverDashboard] No user available for query creation');
         }
@@ -218,31 +188,7 @@ export default function CaregiverDashboard() {
     }
   }, [patientsLoading, patientsError, patients.length, patientsSource, isInitialized, initializationError]);
 
-  const {
-    data: tasks = [],
-    source: tasksSource,
-    isLoading: tasksLoading,
-    error: tasksError
-  } = useCollectionSWR<Task>({
-    cacheKey: `tasks:${user?.id}`,
-    query: isInitialized && !initializationError ? tasksQuery : null,
-    initialData: STATIC_TASKS,
-  });
 
-  // Log tasks query results
-  useEffect(() => {
-    console.log('[CaregiverDashboard] Tasks query state:', {
-      isLoading: tasksLoading,
-      error: tasksError,
-      dataCount: tasks.length,
-      source: tasksSource,
-      isInitialized,
-      hasInitializationError: !!initializationError
-    });
-    if (tasksError) {
-      console.error('[CaregiverDashboard] Tasks query error details:', tasksError);
-    }
-  }, [tasksLoading, tasksError, tasks.length, tasksSource, isInitialized, initializationError]);
 
   // Fetch patient intakes when a patient is selected
   useEffect(() => {
@@ -407,9 +353,9 @@ export default function CaregiverDashboard() {
     );
   }
 
-  // Show error if both patients and tasks failed to load
-  if (patientsError && tasksError) {
-    const isIndexError = patientsError?.message?.includes('requires an index') || tasksError?.message?.includes('requires an index');
+  // Show error if patients failed to load
+  if (patientsError) {
+    const isIndexError = patientsError?.message?.includes('requires an index');
     
     return (
       <SafeAreaView className="flex-1 bg-gray-100">
@@ -418,11 +364,16 @@ export default function CaregiverDashboard() {
             <Text className="text-2xl font-extrabold text-gray-900">PILDHORA</Text>
             <Text className="text-sm text-gray-500">Hola, {displayName}</Text>
           </View>
-          <TouchableOpacity className="px-3 py-2 rounded-lg bg-gray-400 items-center justify-center" onPress={async () => {
-            await dispatch(logout());
-            router.replace('/');
-          }}>
-            <Text className="text-white font-bold text-center">Salir</Text>
+          <TouchableOpacity 
+            className="w-10 h-10 rounded-full bg-gray-700 items-center justify-center shadow-sm"
+            onPress={async () => {
+              await dispatch(logout());
+              router.replace('/auth/signup');
+            }}
+            accessibilityLabel="Salir"
+            accessibilityHint="Cerrar sesión y volver al registro"
+          >
+            <Ionicons name="log-out" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
         <View className="p-4">
@@ -433,7 +384,7 @@ export default function CaregiverDashboard() {
             <Text className="text-orange-700 text-center text-sm mb-4">
               {isIndexError 
                 ? 'Los índices de la base de datos se están configurando. Esto puede tardar unos minutos. Por favor, intenta nuevamente en breve.'
-                : (patientsError?.message || tasksError?.message || 'Verifica tu conexión e intenta nuevamente.')
+                : (patientsError?.message || 'Verifica tu conexión e intenta nuevamente.')
               }
             </Text>
             <TouchableOpacity
