@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, Modal, Linking, ScrollView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Alert, Modal, Linking, ScrollView, ActionSheetIOS, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useRouter } from 'expo-router';
@@ -9,7 +9,7 @@ import { logout } from '../../src/store/slices/authSlice';
 import { fetchMedications } from '../../src/store/slices/medicationsSlice';
 import DoseRing from '../../src/components/DoseRing';
 import { Medication, DoseSegment, IntakeStatus } from '../../src/types';
-import { db } from '../../src/services/firebase';
+import { getDbInstance } from '../../src/services/firebase';
 import { addDoc, collection } from 'firebase/firestore';
 
 // Helpers to align with medications folder style (mobile-first, simple data transforms)
@@ -51,6 +51,7 @@ export default function PatientHome() {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [takingLoading, setTakingLoading] = useState(false);
+  const [accountMenuVisible, setAccountMenuVisible] = useState(false);
 
   useEffect(() => {
     if (patientId) dispatch(fetchMedications(patientId));
@@ -91,7 +92,7 @@ export default function PatientHome() {
 
   const handleHistory = () => router.push('/patient/history');
   const handleEmergency = () => {
-    setModalVisible(true);
+    handleEmergencyPress();
   };
   const callEmergency = (number: string) => {
     try {
@@ -101,9 +102,71 @@ export default function PatientHome() {
     }
     setModalVisible(false);
   };
+
+  const handleEmergencyPress = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancelar', 'Llamar 911', 'Llamar 112'],
+          cancelButtonIndex: 0,
+          destructiveButtonIndex: 1,
+          userInterfaceStyle: 'light',
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) {
+            callEmergency('911');
+          } else if (buttonIndex === 2) {
+            callEmergency('112');
+          }
+        }
+      );
+    } else {
+      setModalVisible(true);
+    }
+  };
   const handleLogout = async () => {
-    await dispatch(logout());
-    router.replace('/');
+    try {
+      console.log('[PatientHome] Starting logout process...');
+      await dispatch(logout());
+      console.log('[PatientHome] Logout successful, redirecting to signup...');
+      router.replace('/auth/signup');
+    } catch (error) {
+      console.error('[PatientHome] Logout error:', error);
+      // Even if logout fails, try to redirect to signup
+      router.replace('/auth/signup');
+    }
+  };
+
+  const handleAccountMenu = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancelar', 'Salir de sesión', 'Configuraciones', 'Mi dispositivo'],
+          cancelButtonIndex: 0,
+          userInterfaceStyle: 'light',
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) {
+            handleLogout();
+          } else if (buttonIndex === 2) {
+            handleConfiguraciones();
+          } else if (buttonIndex === 3) {
+            handleMiDispositivo();
+          }
+        }
+      );
+    } else {
+      setAccountMenuVisible(!accountMenuVisible);
+    }
+  };
+
+  const handleConfiguraciones = () => {
+    // TODO: Navigate to settings page when implemented
+    Alert.alert('Próximamente', 'La página de configuraciones estará disponible pronto.');
+  };
+
+  const handleMiDispositivo = () => {
+    router.push('/patient/link-device');
   };
 
   const handleTakeUpcomingMedication = async () => {
@@ -119,6 +182,7 @@ export default function PatientHome() {
       const scheduledDate = new Date();
       scheduledDate.setHours(hh, mm, 0, 0);
 
+      const db = await getDbInstance();
       await addDoc(collection(db, 'intakeRecords'), {
         medicationName: upcoming.med.name,
         dosage: upcoming.med.dosage,
@@ -141,62 +205,106 @@ export default function PatientHome() {
 
   return (
     <SafeAreaView className="flex-1 bg-gray-100">
+      {/* Android dropdown menu */}
+      {Platform.OS !== 'ios' && accountMenuVisible && (
+        <>
+          <TouchableOpacity
+            className="absolute inset-0 z-40 bg-black/20"
+            onPress={() => setAccountMenuVisible(false)}
+            activeOpacity={1}
+          />
+          <View className="absolute right-4 top-16 bg-white rounded-2xl shadow-xl border border-gray-200 min-w-56 z-50 overflow-hidden">
+            <TouchableOpacity
+              className="px-4 py-4 border-b border-gray-100 flex-row items-center active:bg-gray-50"
+              onPress={handleLogout}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#374151" />
+              <Text className="ml-3 text-gray-700 font-medium text-base">Salir de sesión</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="px-4 py-4 border-b border-gray-100 flex-row items-center active:bg-gray-50"
+              onPress={handleConfiguraciones}
+            >
+              <Ionicons name="settings-outline" size={20} color="#374151" />
+              <Text className="ml-3 text-gray-700 font-medium text-base">Configuraciones</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="px-4 py-4 flex-row items-center active:bg-gray-50"
+              onPress={handleMiDispositivo}
+            >
+              <Ionicons name="hardware-chip-outline" size={20} color="#374151" />
+              <Text className="ml-3 text-gray-700 font-medium text-base">Mi dispositivo</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
       {/* Header */}
       <View className="flex-row items-center justify-between bg-white px-4 py-3 border-b border-gray-200">
         <View>
           <Text className="text-2xl font-extrabold text-gray-900">PILDHORA</Text>
           <Text className="text-sm text-gray-500">Hola, {displayName}</Text>
         </View>
-        <View className="flex-row flex-wrap gap-2">
+        <View className="flex-row items-center gap-3">
           {/* Emergency icon-only button */}
           <TouchableOpacity
-            className="w-10 h-10 rounded-full bg-red-500 items-center justify-center"
+            className="w-10 h-10 rounded-full bg-red-500 items-center justify-center shadow-sm"
             onPress={handleEmergency}
             accessibilityLabel="Emergencia"
             accessibilityHint="Toca para ver opciones de emergencia"
           >
-            <Ionicons name="ios-alert" size={20} color="#FFFFFF" />
+            <Ionicons name="alert" size={20} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity className="px-3 py-2 rounded-lg bg-gray-400 items-center justify-center" onPress={handleLogout}>
-            <Text className="text-white font-bold text-center">Salir</Text>
+          
+          {/* Account button with action sheet */}
+          <TouchableOpacity 
+            className="w-10 h-10 rounded-full bg-gray-700 items-center justify-center shadow-sm"
+            onPress={handleAccountMenu}
+            accessibilityLabel="Cuenta"
+            accessibilityHint="Toca para ver opciones de cuenta"
+          >
+            <Ionicons name="person" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Emergency Modal (native) */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View className="flex-1 bg-black/50 items-center justify-center">
-          <View className="bg-white w-11/12 max-w-md rounded-2xl p-4">
-            <Text className="text-xl font-bold mb-2">Emergencia</Text>
-            <Text className="text-gray-600 mb-4">Selecciona una opción:</Text>
-            <View className="gap-3">
-              <TouchableOpacity
-                className="bg-red-600 rounded-lg px-4 py-3 items-center"
-                onPress={() => callEmergency('911')}
-              >
-                <Text className="text-white font-bold">Llamar 911</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="bg-orange-500 rounded-lg px-4 py-3 items-center"
-                onPress={() => callEmergency('112')}
-              >
-                <Text className="text-white font-bold">Llamar 112</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="bg-gray-200 rounded-lg px-4 py-3 items-center"
-                onPress={() => setModalVisible(false)}
-              >
-                <Text className="text-gray-800 font-semibold">Cancelar</Text>
-              </TouchableOpacity>
+      {/* Emergency Modal (Android only) */}
+      {Platform.OS !== 'ios' && (
+        <Modal
+          visible={modalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View className="flex-1 bg-black/50 items-center justify-center px-6">
+            <View className="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl">
+              <View className="p-6">
+                <Text className="text-2xl font-bold text-gray-900 mb-2">Emergencia</Text>
+                <Text className="text-gray-600 mb-6 text-center">Selecciona una opción:</Text>
+                <View className="gap-3">
+                  <TouchableOpacity
+                    className="bg-red-600 rounded-xl px-4 py-4 items-center shadow-sm active:bg-red-700"
+                    onPress={() => callEmergency('911')}
+                  >
+                    <Text className="text-white font-bold text-lg">Llamar 911</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="bg-orange-500 rounded-xl px-4 py-4 items-center shadow-sm active:bg-orange-600"
+                    onPress={() => callEmergency('112')}
+                  >
+                    <Text className="text-white font-bold text-lg">Llamar 112</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="bg-gray-100 rounded-xl px-4 py-4 items-center active:bg-gray-200"
+                    onPress={() => setModalVisible(false)}
+                  >
+                    <Text className="text-gray-800 font-semibold text-lg">Cancelar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
 
       {/* Scrollable Content */}
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>

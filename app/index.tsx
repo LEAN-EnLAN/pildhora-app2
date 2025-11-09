@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
 export default function WelcomeScreen() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
-  const { user, isAuthenticated, loading } = useSelector((state: RootState) => state.auth);
+  const { user, isAuthenticated, loading, initializing } = useSelector((state: RootState) => state.auth);
 
   useEffect(() => {
     // Check if user is already authenticated
@@ -107,17 +107,22 @@ export default function WelcomeScreen() {
   }, [dispatch]);
 
   useEffect(() => {
-    // Redirect based on auth state
-    if (!loading) {
+    // Redirect based on auth state only after initialization is complete
+    if (!initializing && !loading) {
+      console.log('[Index] Auth state check:', { isAuthenticated, user: user?.id, role: user?.role });
       if (isAuthenticated && user) {
         if (user.role === 'patient') {
+          console.log('[Index] Redirecting to patient home');
           router.replace('/patient/home');
         } else {
+          console.log('[Index] Redirecting to caregiver dashboard');
           router.replace('/caregiver/dashboard');
         }
+      } else {
+        console.log('[Index] User not authenticated, staying at root');
       }
     }
-  }, [isAuthenticated, user, loading, router]);
+  }, [isAuthenticated, user, loading, initializing, router]);
 
   const handleRoleSelect = (role: 'patient' | 'caregiver') => {
     // Navigate to signup with pre-selected role
@@ -128,7 +133,7 @@ export default function WelcomeScreen() {
     router.push('/auth/login');
   };
 
-  if (loading) {
+  if (loading || initializing) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -167,7 +172,7 @@ export default function WelcomeScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity onPress={handleLogin}>
-          <Text style={styles.signInText}>Ya tienes una cuenta? Inicia Sesion</Text>
+          <Text style={styles.signInText}>¿Ya tienes una cuenta? Inicia sesión</Text>
         </TouchableOpacity>
       </View>
     </View>

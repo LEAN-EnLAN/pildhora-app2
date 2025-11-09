@@ -9,9 +9,15 @@ export default function PatientLayout() {
 
   useEffect(() => {
     // Role guard: only allow patients to access patient screens
-    if (!isAuthenticated || user?.role !== 'patient') {
-      router.replace('/');
-    }
+    // Add a small delay to allow logout to complete properly
+    const timer = setTimeout(() => {
+      if (!isAuthenticated || user?.role !== 'patient') {
+        console.log('[PatientLayout] Redirecting - Auth:', isAuthenticated, 'Role:', user?.role);
+        router.replace('/');
+      }
+    }, 300); // Increased delay to allow logout to complete
+
+    return () => clearTimeout(timer);
   }, [isAuthenticated, user?.role]);
 
   return (

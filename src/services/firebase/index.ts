@@ -1,11 +1,18 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
-import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
-import { getDatabase, connectDatabaseEmulator } from 'firebase/database';
+import { initializeApp, FirebaseApp } from 'firebase/app';
+import { getAuth, connectAuthEmulator, setPersistence, browserLocalPersistence, Auth } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator, Firestore } from 'firebase/firestore';
+import { getFunctions, connectFunctionsEmulator, Functions } from 'firebase/functions';
+import { getDatabase, connectDatabaseEmulator, Database } from 'firebase/database';
 import { diagnoseNetworkIssues } from '../../utils/networkCheck';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+
+// Firebase initialization state management
+let isFirebaseInitialized = false;
+let initializationError: Error | null = null;
+let initializationPromise: Promise<void> | null = null;
+let resolveInitialization: (() => void) | null = null;
+let rejectInitialization: ((error: Error) => void) | null = null;
 
 // Firebase configuration using individual environment variables
 // Nota: Las variables deben comenzar con "EXPO_PUBLIC_" para estar disponibles en tiempo de ejecución.
@@ -35,76 +42,214 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || !firebaseConfig.appId
   );
 }
 
-// Initialize Firebase with error handling
-let app;
-try {
-  // First, check network connectivity to Firebase services
-  const enableDiagnostics = process.env.EXPO_PUBLIC_ENABLE_NETWORK_DIAGNOSTICS === 'true';
-  if (enableDiagnostics) {
-    console.log('[Firebase] Checking network connectivity to Firebase services...');
-    diagnoseNetworkIssues().then((issues) => {
+// Initialize Firebase with error handling and promise-based initialization
+let app: FirebaseApp | null = null;
+
+// Create initialization promise
+initializationPromise = new Promise<void>((resolve, reject) => {
+  resolveInitialization = resolve;
+  rejectInitialization = reject;
+});
+
+const initializeFirebaseApp = async (): Promise<void> => {
+  if (isFirebaseInitialized) {
+    return;
+  }
+
+  if (initializationError) {
+    throw initializationError;
+  }
+
+  try {
+    // First, check network connectivity to Firebase services
+    const enableDiagnostics = process.env.EXPO_PUBLIC_ENABLE_NETWORK_DIAGNOSTICS === 'true';
+    if (enableDiagnostics) {
+      console.log('[Firebase] Checking network connectivity to Firebase services...');
+      const issues = await diagnoseNetworkIssues();
       if (issues.length > 0) {
         console.warn('[Firebase] Network issues detected:', issues);
       }
-    });
-  }
-
-  app = initializeApp(firebaseConfig);
-  console.log('[Firebase] Successfully initialized Firebase app');
-  console.log('[Firebase] Project diagnostics:', {
-    projectId: firebaseConfig.projectId,
-    authDomain: firebaseConfig.authDomain,
-    databaseURL: firebaseConfig.databaseURL,
-    storageBucket: firebaseConfig.storageBucket,
-  });
-} catch (error: any) {
-  console.error('[Firebase] Failed to initialize Firebase:', error);
-
-  // Check for common network/DNS issues
-  if (error.message.includes('fetch') || error.message.includes('network')) {
-    const enableDiagnostics = process.env.EXPO_PUBLIC_ENABLE_NETWORK_DIAGNOSTICS === 'true';
-    if (enableDiagnostics) {
-      diagnoseNetworkIssues().then((issues) => {
-        console.error('[Firebase] Detailed network diagnosis:', issues);
-      });
     }
 
-    throw new Error(
-      '[Firebase] Network error detected. This might be due to DNS resolution issues. ' +
-      'Try changing your DNS servers to 8.8.8.8 and 8.8.4.4 (Google DNS) or 1.1.1.1 (Cloudflare DNS).'
-    );
-  }
+    app = initializeApp(firebaseConfig);
+    console.log('[Firebase] Successfully initialized Firebase app');
+    console.log('[Firebase] Project diagnostics:', {
+      projectId: firebaseConfig.projectId,
+      authDomain: firebaseConfig.authDomain,
+      databaseURL: firebaseConfig.databaseURL,
+      storageBucket: firebaseConfig.storageBucket,
+    });
 
-  throw error;
-}
+    isFirebaseInitialized = true;
+    initializationError = null;
+    
+    if (resolveInitialization) {
+      resolveInitialization();
+    }
+  } catch (error: any) {
+    console.error('[Firebase] Failed to initialize Firebase:', error);
+    initializationError = error;
 
-// Initialize Firebase Auth
-const authInstance = getAuth(app);
-// Ensure web persistence across reloads/tabs
-if (Platform.OS === 'web') {
-  try {
-    setPersistence(authInstance, browserLocalPersistence);
-  } catch (e) {
-    console.warn('[Firebase] Failed to set web auth persistence', e);
+    // Check for common network/DNS issues
+    if (error.message.includes('fetch') || error.message.includes('network')) {
+      const enableDiagnostics = process.env.EXPO_PUBLIC_ENABLE_NETWORK_DIAGNOSTICS === 'true';
+      if (enableDiagnostics) {
+        const issues = await diagnoseNetworkIssues();
+        console.error('[Firebase] Detailed network diagnosis:', issues);
+      }
+
+      const networkError = new Error(
+        '[Firebase] Network error detected. This might be due to DNS resolution issues. ' +
+        'Try changing your DNS servers to 8.8.8.8 and 8.8.4.4 (Google DNS) or 1.1.1.1 (Cloudflare DNS).'
+      );
+      
+      if (rejectInitialization) {
+        rejectInitialization(networkError);
+      }
+      throw networkError;
+    }
+
+    if (rejectInitialization) {
+      rejectInitialization(error);
+    }
+    throw error;
   }
-}
+};
+
+// Start initialization immediately
+initializeFirebaseApp().catch(error => {
+  console.error('[Firebase] Initialization failed:', error);
+});
+
+// Initialize Firebase Auth only after Firebase app is ready
+let authInstance: Auth | null = null;
+let dbInstance: Firestore | null = null;
+let functionsInstance: Functions | null = null;
+let rdbInstance: Database | null = null;
+
+const initializeFirebaseServices = async () => {
+  await waitForFirebaseInitialization();
+  
+  if (!authInstance) {
+    authInstance = getAuth(app!);
+    // Ensure web persistence across reloads/tabs
+    if (Platform.OS === 'web') {
+      try {
+        await setPersistence(authInstance, browserLocalPersistence);
+      } catch (e) {
+        console.warn('[Firebase] Failed to set web auth persistence', e);
+      }
+    }
+  }
+  
+  if (!dbInstance) {
+    dbInstance = getFirestore(app!);
+  }
+  
+  if (!functionsInstance) {
+    functionsInstance = getFunctions(app!);
+  }
+  
+  if (!rdbInstance) {
+    rdbInstance = getDatabase(app!);
+  }
+};
+
+// Export getters that ensure initialization
+export const getAuthInstance = async () => {
+  await initializeFirebaseServices();
+  return authInstance;
+};
+
+export const getDbInstance = async () => {
+  await initializeFirebaseServices();
+  return dbInstance;
+};
+
+export const getFunctionsInstance = async () => {
+  await initializeFirebaseServices();
+  return functionsInstance;
+};
+
+export const getRdbInstance = async () => {
+  await initializeFirebaseServices();
+  return rdbInstance;
+};
+
+// For backward compatibility, export the instances directly
+// Note: These should only be used after ensuring Firebase is initialized
 export const auth = authInstance;
-export const db = getFirestore(app);
-export const functions = getFunctions(app);
-export const rdb = getDatabase(app);
+export const db = dbInstance;
+export const functions = functionsInstance;
+export const rdb = rdbInstance;
 
-// Optional: connect to emulators if enabled via env var
+// Connect to emulators if enabled via env var
 // EXPO_PUBLIC_USE_FIREBASE_EMULATORS=true
-if (process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS === 'true') {
+const connectToEmulators = async () => {
+  if (process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS !== 'true') {
+    return;
+  }
+
   try {
-    connectAuthEmulator(auth, process.env.EXPO_PUBLIC_AUTH_EMULATOR_URL || 'http://localhost:9099', { disableWarnings: true });
-    connectFirestoreEmulator(db, process.env.EXPO_PUBLIC_FIRESTORE_EMULATOR_HOST || 'localhost', Number(process.env.EXPO_PUBLIC_FIRESTORE_EMULATOR_PORT || 8080));
-    connectDatabaseEmulator(rdb, process.env.EXPO_PUBLIC_DATABASE_EMULATOR_HOST || 'localhost', Number(process.env.EXPO_PUBLIC_DATABASE_EMULATOR_PORT || 9000));
-    connectFunctionsEmulator(functions, process.env.EXPO_PUBLIC_FUNCTIONS_EMULATOR_HOST || 'localhost', Number(process.env.EXPO_PUBLIC_FUNCTIONS_EMULATOR_PORT || 5001));
+    await initializeFirebaseServices();
+    
+    if (authInstance) {
+      connectAuthEmulator(authInstance, process.env.EXPO_PUBLIC_AUTH_EMULATOR_URL || 'http://localhost:9099', { disableWarnings: true });
+    }
+    if (dbInstance) {
+      connectFirestoreEmulator(dbInstance, process.env.EXPO_PUBLIC_FIRESTORE_EMULATOR_HOST || 'localhost', Number(process.env.EXPO_PUBLIC_FIRESTORE_EMULATOR_PORT || 8080));
+    }
+    if (rdbInstance) {
+      connectDatabaseEmulator(rdbInstance, process.env.EXPO_PUBLIC_DATABASE_EMULATOR_HOST || 'localhost', Number(process.env.EXPO_PUBLIC_DATABASE_EMULATOR_PORT || 9000));
+    }
+    if (functionsInstance) {
+      connectFunctionsEmulator(functionsInstance, process.env.EXPO_PUBLIC_FUNCTIONS_EMULATOR_HOST || 'localhost', Number(process.env.EXPO_PUBLIC_FUNCTIONS_EMULATOR_PORT || 5001));
+    }
     console.log('[Firebase] Connected to local emulators');
   } catch (e) {
     console.warn('[Firebase] Failed to connect to local emulators', e);
   }
-}
+};
+
+// Connect to emulators after initialization
+initializationPromise?.then(() => {
+  connectToEmulators();
+}).catch(error => {
+  console.error('[Firebase] Failed to connect to emulators due to initialization error:', error);
+});
+
+// Export initialization utilities
+export const waitForFirebaseInitialization = async (): Promise<void> => {
+  if (isFirebaseInitialized) {
+    return;
+  }
+  
+  if (initializationError) {
+    throw initializationError;
+  }
+  
+  if (initializationPromise) {
+    return initializationPromise;
+  }
+  
+  throw new Error('[Firebase] Initialization promise not available');
+};
+
+export const isFirebaseReady = (): boolean => isFirebaseInitialized;
+
+export const getInitializationError = (): Error | null => initializationError;
+
+export const reinitializeFirebase = async (): Promise<void> => {
+  isFirebaseInitialized = false;
+  initializationError = null;
+  initializationPromise = new Promise<void>((resolve, reject) => {
+    resolveInitialization = resolve;
+    rejectInitialization = reject;
+  });
+  
+  await initializeFirebaseApp();
+  await initializeFirebaseServices();
+  await connectToEmulators();
+};
 
 export default app;

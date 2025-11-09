@@ -14,6 +14,7 @@ import { RootState, AppDispatch } from "../../../src/store";
 import { fetchMedications } from "../../../src/store/slices/medicationsSlice";
 import { startIntakesSubscription, stopIntakesSubscription, deleteAllIntakes, updateIntakeStatus } from "../../../src/store/slices/intakesSlice";
 import { IntakeRecord, IntakeStatus } from "../../../src/types";
+import { waitForFirebaseInitialization } from "../../../src/services/firebase";
 // Real-time data is now handled by Redux intakesSlice
 
 type EnrichedIntakeRecord = IntakeRecord & {
@@ -30,25 +31,45 @@ export default function HistoryScreen() {
   const { user } = useSelector((state: RootState) => state.auth);
   const { medications } = useSelector((state: RootState) => state.medications);
   
-  const { intakes, loading } = useSelector((state: RootState) => state.intakes);
+  const { intakes, loading, error } = useSelector((state: RootState) => state.intakes);
   const [selectedFilter, setSelectedFilter] = useState<"all" | "taken" | "missed">("all");
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const patientId = user?.id;
 
+  // Wait for Firebase initialization before starting subscriptions
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        await waitForFirebaseInitialization();
+        setIsInitialized(true);
+      } catch (error: any) {
+        console.error('[History] Firebase initialization error:', error);
+        Alert.alert(
+          "Error de Conexión",
+          "No se pudo conectar con la base de datos. Por favor, verifica tu conexión a internet e intenta nuevamente.",
+          [{ text: "OK" }]
+        );
+      }
+    };
+
+    initializeApp();
+  }, []);
+
   // Subscribe to real-time intakes via Redux slice (server-side ordered)
   useEffect(() => {
-    if (!patientId) return;
+    if (!patientId || !isInitialized) return;
     dispatch(startIntakesSubscription(patientId));
     return () => {
       dispatch(stopIntakesSubscription());
     };
-  }, [patientId]);
+  }, [patientId, isInitialized, dispatch]);
 
   useEffect(() => {
-    if (patientId) {
+    if (patientId && isInitialized) {
       dispatch(fetchMedications(patientId));
     }
-  }, [patientId]);
+  }, [patientId, isInitialized, dispatch]);
 
   // No longer load mock history; real-time subscription via Redux handles updates
 
@@ -99,11 +120,12 @@ export default function HistoryScreen() {
           onPress: async () => {
             try {
               if (!patientId) return;
-              await dispatch(deleteAllIntakes(patientId));
-              Alert.alert("Éxito", "Todos los datos han sido eliminados");
-            } catch (error) {
+              const result = await dispatch(deleteAllIntakes(patientId)).unwrap();
+              Alert.alert("Éxito", `Se han eliminado ${result.deleted} registros del historial`);
+            } catch (error: any) {
               console.error("Error clearing data:", error);
-              Alert.alert("Error", "No se pudieron eliminar los datos");
+              const errorMessage = error?.message || "No se pudieron eliminar los datos";
+              Alert.alert("Error", errorMessage);
             }
           },
         },
@@ -115,8 +137,10 @@ export default function HistoryScreen() {
     try {
       await dispatch(updateIntakeStatus({ id: recordId, status: IntakeStatus.MISSED })).unwrap();
       Alert.alert("Actualizado", "El registro ha sido marcado como olvidado.");
-    } catch (e) {
-      Alert.alert("Error", "No se pudo actualizar el estado del registro.");
+    } catch (error: any) {
+      console.error("Error updating intake status:", error);
+      const errorMessage = error?.message || "No se pudo actualizar el estado del registro.";
+      Alert.alert("Error", errorMessage);
     }
   };
 
@@ -137,10 +161,37 @@ export default function HistoryScreen() {
     });
   };
 
-  if (loading) {
+  if (loading || !isInitialized) {
     return (
       <SafeAreaView className="flex-1 bg-gray-100 justify-center items-center">
-        <Text className="text-gray-600">Cargando historial...</Text>
+        <Text className="text-gray-600">
+          {!isInitialized ? "Inicializando aplicación..." : "Cargando historial..."}
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  // Show error state if there's an error
+  if (error) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-100 justify-center items-center px-6">
+        <Ionicons name="warning-outline" size={48} color="#EF4444" />
+        <Text className="text-red-600 mt-4 text-center font-semibold">
+          Error de Conexión
+        </Text>
+        <Text className="text-gray-600 mt-2 text-center">
+          {error}
+        </Text>
+        <TouchableOpacity
+          className="mt-6 bg-blue-600 px-6 py-3 rounded-lg"
+          onPress={() => {
+            // Reset the initialization state to trigger a retry
+            setIsInitialized(false);
+            // This will trigger the initialization useEffect again
+          }}
+        >
+          <Text className="text-white font-semibold">Reintentar</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -174,6 +225,10 @@ export default function HistoryScreen() {
                 : "bg-gray-200 border border-gray-300"
             }`}
             onPress={() => setSelectedFilter("all")}
+            activeOpacity={selectedFilter === "all" ? 0.8 : 1}
+            accessibilityRole="button"
+            accessibilityLabel="Mostrar todos los registros"
+            accessibilityState={selectedFilter === "all" ? { selected: true } : undefined}
           >
             <Text
               className={`font-semibold ${
@@ -190,6 +245,10 @@ export default function HistoryScreen() {
                 : "bg-gray-200 border border-gray-300"
             }`}
             onPress={() => setSelectedFilter("taken")}
+            activeOpacity={selectedFilter === "taken" ? 0.8 : 1}
+            accessibilityRole="button"
+            accessibilityLabel="Mostrar solo medicamentos tomados"
+            accessibilityState={selectedFilter === "taken" ? { selected: true } : undefined}
           >
             <Text
               className={`font-semibold ${
@@ -206,6 +265,10 @@ export default function HistoryScreen() {
                 : "bg-gray-200 border border-gray-300"
             }`}
             onPress={() => setSelectedFilter("missed")}
+            activeOpacity={selectedFilter === "missed" ? 0.8 : 1}
+            accessibilityRole="button"
+            accessibilityLabel="Mostrar solo medicamentos olvidados"
+            accessibilityState={selectedFilter === "missed" ? { selected: true } : undefined}
           >
             <Text
               className={`font-semibold ${

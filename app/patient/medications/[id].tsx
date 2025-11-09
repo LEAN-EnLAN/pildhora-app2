@@ -22,7 +22,6 @@ export default function EditMedicationScreen() {
   return (
     <ScrollView className="flex-1 bg-gray-100">
       <View className="p-4">
-        <Text className="text-xl font-bold mb-4">Editar Medicamento</Text>
         <MedicationForm mode="edit" medication={medication} />
         <TouchableOpacity className="bg-red-500 px-4 py-2 rounded-lg mt-4" onPress={handleDelete}>
           <Text className="text-white font-semibold text-center">Eliminar</Text>

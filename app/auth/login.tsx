@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { signIn, logout } from '../../src/store/slices/authSlice';
 import { RootState, AppDispatch } from '../../src/store';
-import { auth } from '../../src/services/firebase';
+import { getAuthInstance } from '../../src/services/firebase';
 
 // Disable shadow styles on web to avoid RN Web generating boxShadow CSS
 const commonShadow = Platform.select({
@@ -136,17 +136,42 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
-  const { loading, error, isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+  const { loading, error, isAuthenticated, user, initializing } = useSelector((state: RootState) => state.auth);
 
   // If a user is already authenticated, show a helpful banner and option to log out.
   // This avoids confusion where an existing session could redirect unexpectedly.
   useEffect(() => {
-    // No automatic redirect here to allow explicit login/logout testing.
-  }, []);
+    // Check if user is already authenticated and redirect if needed
+    if (!initializing && isAuthenticated && user) {
+      console.log('[Login] User already authenticated, redirecting to appropriate page');
+      if (user.role === 'patient') {
+        router.replace('/patient/home');
+      } else {
+        router.replace('/caregiver/dashboard');
+      }
+    }
+  }, [isAuthenticated, user, initializing, router]);
 
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Por favor completa todos los campos');
+      return;
+    }
+
+    // Prevent duplicate login attempts
+    if (loading) {
+      console.log('[Login] Login already in progress, ignoring duplicate request');
+      return;
+    }
+
+    // Check if user is already authenticated
+    if (isAuthenticated && user) {
+      console.log('[Login] User already authenticated, redirecting to appropriate page');
+      if (user.role === 'patient') {
+        router.replace('/patient/home');
+      } else {
+        router.replace('/caregiver/dashboard');
+      }
       return;
     }
 
@@ -177,7 +202,10 @@ export default function LoginScreen() {
     // Cerrar sesión para limpiar cualquier sesión existente y estado de autenticación persistido
     await dispatch(logout());
     // También aseguramos que la sesión de Firebase Auth se cierre
-    try { await auth.signOut(); } catch {}
+    try { 
+      const authInstance = await getAuthInstance();
+      if (authInstance) await authInstance.signOut(); 
+    } catch {}
     Alert.alert('Sesión cerrada', 'Has cerrado sesión. Ahora puedes iniciar con otra cuenta.');
   };
 

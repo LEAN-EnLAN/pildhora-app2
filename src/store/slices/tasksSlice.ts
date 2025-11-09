@@ -1,7 +1,9 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { Task, ApiResponse } from '../../types';
-import { db } from '../../services/firebase';
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { Task, ApiResponse, User } from '../../types';
+import { getDbInstance, waitForFirebaseInitialization } from '../../services/firebase';
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where, orderBy, getDoc } from 'firebase/firestore';
+import { convertTimestamps } from '../../utils/firestoreUtils';
+import { getAuth } from 'firebase/auth';
 
 interface TasksState {
   tasks: Task[];
@@ -18,8 +20,25 @@ const initialState: TasksState = {
 // Async thunks
 export const fetchTasks = createAsyncThunk(
   'tasks/fetchTasks',
-  async (userId: string, { rejectWithValue }) => {
+  async (userId: string, { rejectWithValue, getState }) => {
     try {
+      // Wait for Firebase to initialize
+      await waitForFirebaseInitialization();
+      
+      // Get the current authenticated user
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      
+      // Get the user data from Redux state to validate permissions
+      const state = getState() as { auth: { user: User | null } };
+      const user = state.auth.user;
+      
+      // Get the database instance
+      const db = await getDbInstance();
+      if (!db) {
+        throw new Error('Firestore database not available');
+      }
+      
       const q = query(
         collection(db, 'tasks'),
         where('caregiverId', '==', userId),
@@ -28,7 +47,8 @@ export const fetchTasks = createAsyncThunk(
       const querySnapshot = await getDocs(q);
       const tasks: Task[] = [];
       querySnapshot.forEach((doc) => {
-        tasks.push({ id: doc.id, ...doc.data() } as Task);
+        const convertedData = convertTimestamps(doc.data());
+        tasks.push({ id: doc.id, ...convertedData } as Task);
       });
       return tasks;
     } catch (error: any) {
@@ -39,8 +59,17 @@ export const fetchTasks = createAsyncThunk(
 
 export const addTask = createAsyncThunk(
   'tasks/addTask',
-  async (task: Omit<Task, 'id' | 'createdAt'>, { rejectWithValue }) => {
+  async (task: Omit<Task, 'id' | 'createdAt'>, { rejectWithValue, getState }) => {
     try {
+      // Wait for Firebase to initialize
+      await waitForFirebaseInitialization();
+      
+      // Get the database instance
+      const db = await getDbInstance();
+      if (!db) {
+        throw new Error('Firestore database not available');
+      }
+      
       const docRef = await addDoc(collection(db, 'tasks'), {
         ...task,
         createdAt: new Date(),
@@ -56,6 +85,15 @@ export const updateTask = createAsyncThunk(
   'tasks/updateTask',
   async ({ id, updates }: { id: string; updates: Partial<Task> }, { rejectWithValue }) => {
     try {
+      // Wait for Firebase to initialize
+      await waitForFirebaseInitialization();
+      
+      // Get the database instance
+      const db = await getDbInstance();
+      if (!db) {
+        throw new Error('Firestore database not available');
+      }
+      
       await updateDoc(doc(db, 'tasks', id), updates);
       return { id, updates };
     } catch (error: any) {
@@ -68,6 +106,15 @@ export const deleteTask = createAsyncThunk(
   'tasks/deleteTask',
   async (id: string, { rejectWithValue }) => {
     try {
+      // Wait for Firebase to initialize
+      await waitForFirebaseInitialization();
+      
+      // Get the database instance
+      const db = await getDbInstance();
+      if (!db) {
+        throw new Error('Firestore database not available');
+      }
+      
       await deleteDoc(doc(db, 'tasks', id));
       return id;
     } catch (error: any) {

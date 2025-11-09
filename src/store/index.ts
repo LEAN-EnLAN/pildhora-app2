@@ -14,7 +14,9 @@ import deviceReducer from './slices/deviceSlice';
 const persistConfig = {
   key: 'root',
   storage: AsyncStorage,
-  whitelist: ['auth', 'medications', 'tasks'], // Persist these slices, not BLE/device real-time state
+  whitelist: ['medications', 'tasks'], // Persist these slices, not BLE/device real-time state
+  // Auth state will be rehydrated but validated against Firebase on app start
+  blacklist: ['auth'], // Don't persist auth state to avoid stale authentication
 };
 
 const rootReducer = combineReducers({
@@ -26,7 +28,31 @@ const rootReducer = combineReducers({
   device: deviceReducer,
 });
 
-const persistedReducer = persistReducer(persistConfig, rootReducer);
+// Create a root reducer that can reset state when needed
+const createRootReducer = () => {
+  const appReducer = rootReducer;
+  
+  return (state: any, action: any) => {
+    // Clear all state on logout or when auth state is invalid
+    if (action.type === 'auth/clearAuthState') {
+      // Reset auth state completely
+      state = {
+        ...state,
+        auth: {
+          user: null,
+          loading: false,
+          initializing: false,
+          error: null,
+          isAuthenticated: false,
+        }
+      };
+    }
+    
+    return appReducer(state, action);
+  };
+};
+
+const persistedReducer = persistReducer(persistConfig, createRootReducer());
 
 export const store = configureStore({
   reducer: persistedReducer,

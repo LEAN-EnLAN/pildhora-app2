@@ -209,7 +209,7 @@ export default function SignupScreen() {
   const [role, setRole] = useState<'patient' | 'caregiver'>('patient');
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
-  const { loading, error } = useSelector((state: RootState) => state.auth);
+  const { loading, error, isAuthenticated, user, initializing } = useSelector((state: RootState) => state.auth);
   const params = useLocalSearchParams();
 
   useEffect(() => {
@@ -218,6 +218,18 @@ export default function SignupScreen() {
       setRole(params.role as 'patient' | 'caregiver');
     }
   }, [params.role]);
+
+  // Check if user is already authenticated and redirect if needed
+  useEffect(() => {
+    if (!initializing && isAuthenticated && user) {
+      console.log('[Signup] User already authenticated, redirecting to appropriate page');
+      if (user.role === 'patient') {
+        router.replace('/patient/home');
+      } else {
+        router.replace('/caregiver/dashboard');
+      }
+    }
+  }, [isAuthenticated, user, initializing, router]);
 
   const handleSignup = async () => {
     if (!name || !email || !password || !confirmPassword) {
@@ -232,6 +244,23 @@ export default function SignupScreen() {
 
     if (password.length < 6) {
       Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    // Prevent duplicate signup attempts
+    if (loading) {
+      console.log('[Signup] Signup already in progress, ignoring duplicate request');
+      return;
+    }
+
+    // Check if user is already authenticated
+    if (isAuthenticated && user) {
+      console.log('[Signup] User already authenticated, redirecting to appropriate page');
+      if (user.role === 'patient') {
+        router.replace('/patient/home');
+      } else {
+        router.replace('/caregiver/dashboard');
+      }
       return;
     }
 

@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { User, ApiResponse } from '../../types';
-import { auth, db } from '../../services/firebase';
+import { getAuthInstance, getDbInstance } from '../../services/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { convertTimestamps } from '../../utils/firestoreUtils';
@@ -8,6 +8,7 @@ import { convertTimestamps } from '../../utils/firestoreUtils';
 interface AuthState {
   user: User | null;
   loading: boolean;
+  initializing: boolean; // Track Firebase initialization state
   error: string | null;
   isAuthenticated: boolean;
 }
@@ -15,6 +16,7 @@ interface AuthState {
 const initialState: AuthState = {
   user: null,
   loading: false,
+  initializing: true, // Start in initializing state
   error: null,
   isAuthenticated: false,
 };
@@ -24,6 +26,14 @@ export const signUp = createAsyncThunk(
   'auth/signUp',
   async ({ email, password, name, role }: { email: string; password: string; name: string; role: 'patient' | 'caregiver' }, { rejectWithValue }) => {
     try {
+      // Ensure Firebase is initialized before signing up
+      const auth = await getAuthInstance();
+      const db = await getDbInstance();
+      
+      if (!auth || !db) {
+        throw new Error('Firebase services not initialized');
+      }
+      
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
@@ -49,6 +59,14 @@ export const signIn = createAsyncThunk(
   'auth/signIn',
   async ({ email, password }: { email: string; password: string }, { rejectWithValue }) => {
     try {
+      // Ensure Firebase is initialized before signing in
+      const auth = await getAuthInstance();
+      const db = await getDbInstance();
+      
+      if (!auth || !db) {
+        throw new Error('Firebase services not initialized');
+      }
+      
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
@@ -70,6 +88,13 @@ export const logout = createAsyncThunk(
   'auth/logout',
   async (_, { rejectWithValue }) => {
     try {
+      // Ensure Firebase is initialized before signing out
+      const auth = await getAuthInstance();
+      
+      if (!auth) {
+        throw new Error('Firebase Auth not initialized');
+      }
+      
       await signOut(auth);
     } catch (error: any) {
       return rejectWithValue(error.message);
@@ -79,34 +104,47 @@ export const logout = createAsyncThunk(
 
 export const checkAuthState = createAsyncThunk(
   'auth/checkAuthState',
-  async (_, { dispatch }) => {
-    return new Promise<User | null>((resolve) => {
-      console.log('[Auth] Checking authentication state...');
-      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-        if (firebaseUser) {
-          console.log('[Auth] Firebase user authenticated:', firebaseUser.uid);
-          // Get user data from Firestore
-          try {
-            const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-            if (userDoc.exists()) {
-              const userData = convertTimestamps(userDoc.data()) as User;
-              console.log('[Auth] User data loaded from Firestore:', userData);
-              resolve(userData);
-            } else {
-              console.error('[Auth] User document not found in Firestore');
+  async (_, { rejectWithValue }) => {
+    try {
+      // Ensure Firebase is initialized before checking auth state
+      const auth = await getAuthInstance();
+      const db = await getDbInstance();
+      
+      if (!auth || !db) {
+        throw new Error('Firebase services not initialized');
+      }
+      
+      return new Promise<User | null>((resolve) => {
+        console.log('[Auth] Checking authentication state...');
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+          if (firebaseUser) {
+            console.log('[Auth] Firebase user authenticated:', firebaseUser.uid);
+            // Get user data from Firestore
+            try {
+              const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+              if (userDoc.exists()) {
+                const userData = convertTimestamps(userDoc.data()) as User;
+                console.log('[Auth] User data loaded from Firestore:', userData);
+                resolve(userData);
+              } else {
+                console.error('[Auth] User document not found in Firestore');
+                resolve(null);
+              }
+            } catch (error) {
+              console.error('[Auth] Error loading user data from Firestore:', error);
               resolve(null);
             }
-          } catch (error) {
-            console.error('[Auth] Error loading user data from Firestore:', error);
+          } else {
+            console.log('[Auth] No authenticated Firebase user');
             resolve(null);
           }
-        } else {
-          console.log('[Auth] No authenticated Firebase user');
-          resolve(null);
-        }
-        unsubscribe();
+          unsubscribe();
+        });
       });
-    });
+    } catch (error: any) {
+      console.error('[Auth] Error checking auth state:', error);
+      return rejectWithValue(error.message || 'Failed to check authentication state');
+    }
   }
 );
 
@@ -121,11 +159,21 @@ const authSlice = createSlice({
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.loading = action.payload;
     },
+    setInitializing: (state, action: PayloadAction<boolean>) => {
+      state.initializing = action.payload;
+    },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
     clearError: (state) => {
       state.error = null;
+    },
+    clearAuthState: (state) => {
+      // Clear all auth state for logout or stale state cleanup
+      state.user = null;
+      state.isAuthenticated = false;
+      state.error = null;
+      state.loading = false;
     },
   },
   extraReducers: (builder) => {
@@ -138,10 +186,12 @@ const authSlice = createSlice({
         state.loading = false;
         state.user = action.payload;
         state.isAuthenticated = true;
+        state.initializing = false;
       })
       .addCase(signUp.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+        state.initializing = false;
       })
       .addCase(signIn.pending, (state) => {
         state.loading = true;
@@ -151,10 +201,12 @@ const authSlice = createSlice({
         state.loading = false;
         state.user = action.payload;
         state.isAuthenticated = true;
+        state.initializing = false;
       })
       .addCase(signIn.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+        state.initializing = false;
       })
       .addCase(logout.pending, (state) => {
         state.loading = true;
@@ -163,18 +215,29 @@ const authSlice = createSlice({
         state.loading = false;
         state.user = null;
         state.isAuthenticated = false;
+        state.initializing = false;
       })
       .addCase(logout.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+        state.initializing = false;
+      })
+      .addCase(checkAuthState.pending, (state) => {
+        state.initializing = true;
       })
       .addCase(checkAuthState.fulfilled, (state, action) => {
         state.user = action.payload;
         state.isAuthenticated = !!action.payload;
         state.loading = false;
+        state.initializing = false;
+      })
+      .addCase(checkAuthState.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        state.initializing = false;
       });
   },
 });
 
-export const { setUser, setLoading, setError, clearError } = authSlice.actions;
+export const { setUser, setLoading, setInitializing, setError, clearError, clearAuthState } = authSlice.actions;
 export default authSlice.reducer;

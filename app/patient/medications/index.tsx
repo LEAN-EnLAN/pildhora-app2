@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+ a React, { useEffect } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'expo-router';
 import { RootState, AppDispatch } from '../../../src/store';
 import { fetchMedications } from '../../../src/store/slices/medicationsSlice';
+import { Medication } from '../../../src/types';
 
 export default function MedicationsIndex() {
   const dispatch = useDispatch<AppDispatch>();
@@ -17,31 +18,54 @@ export default function MedicationsIndex() {
     }
   }, [patientId]);
 
+  // Helper function to format medication display
+  const formatMedicationDisplay = (medication: Medication) => {
+    // Check if using new format
+    if (medication.doseValue && medication.doseUnit) {
+      const dose = `${medication.doseValue}${medication.doseUnit}`;
+      const quantity = medication.quantityType || 'Tablets';
+      return `${dose}, ${quantity}`;
+    }
+    
+    // Fallback to legacy format
+    return medication.dosage || 'Sin dosis especificada';
+  };
+
+  const formatTimeDisplay = (time: string) => {
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes} ${ampm}`;
+  };
+
   return (
-    <View className="flex-1 bg-gray-100 p-4">
-      <View className="flex-row justify-between items-center mb-4">
-        <Text className="text-xl font-bold">Mis Medicamentos</Text>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Mis Medicamentos</Text>
         <Link href="/patient/medications/add" asChild>
-          <TouchableOpacity className="bg-blue-500 px-4 py-2 rounded-lg">
-            <Text className="text-white font-semibold">Añadir</Text>
+          <TouchableOpacity style={styles.addButton}>
+            <Text style={styles.addButtonText}>Añadir</Text>
           </TouchableOpacity>
         </Link>
       </View>
       {loading ? (
-        <Text className="text-gray-600">Cargando...</Text>
+        <Text style={styles.loadingText}>Cargando...</Text>
       ) : (
         <FlatList
           data={medications}
           keyExtractor={(item) => item.id}
-          ItemSeparatorComponent={() => <View className="h-px bg-gray-200" />}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
           renderItem={({ item }) => (
             <Link href={`/patient/medications/${item.id}`} asChild>
-              <TouchableOpacity className="bg-white p-4 rounded-lg">
-                <Text className="text-lg font-semibold">{item.name}</Text>
-                <Text className="text-gray-600">{item.dosage}</Text>
-                <Text className="text-gray-600">{item.frequency}</Text>
+              <TouchableOpacity style={styles.medicationCard}>
+                <Text style={styles.medicationName}>{item.name}</Text>
+                <Text style={styles.medicationDosage}>{formatMedicationDisplay(item)}</Text>
+                <Text style={styles.medicationFrequency}>{item.frequency}</Text>
                 {item.times?.length ? (
-                  <Text className="text-gray-600">Próxima: {item.times[0]}</Text>
+                  <Text style={styles.nextDose}>
+                    Próxima: {formatTimeDisplay(item.times[0])}
+                  </Text>
                 ) : null}
               </TouchableOpacity>
             </Link>
@@ -51,3 +75,69 @@ export default function MedicationsIndex() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    padding: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  addButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  loadingText: {
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 4,
+  },
+  medicationCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  medicationName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  medicationDosage: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  medicationFrequency: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  nextDose: {
+    fontSize: 14,
+    color: '#059669',
+    fontWeight: '500',
+  },
+});
