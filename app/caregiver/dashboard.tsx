@@ -32,55 +32,6 @@ import {
 import DoseRing from '../../src/components/DoseRing';
 import { Patient, PatientWithDevice, Task, DoseSegment, IntakeRecord, IntakeStatus } from '../../src/types';
 
-// Static default data for immediate rendering
-const STATIC_PATIENTS: Patient[] = [
-  {
-    id: 'patient-1',
-    name: 'John Doe',
-    email: 'john@example.com',
-    caregiverId: 'caregiver-1',
-    createdAt: new Date(),
-    adherence: 85,
-    lastTaken: '2 hours ago'
-  },
-  {
-    id: 'patient-2',
-    name: 'Jane Smith',
-    email: 'jane@example.com',
-    caregiverId: 'caregiver-1',
-    createdAt: new Date(),
-    adherence: 92,
-    lastTaken: '30 minutes ago'
-  },
-];
-
-
-
-// Generate mock dose segments for demonstration
-const generateMockDoseSegments = (adherence: number): DoseSegment[] => {
-  const segments: DoseSegment[] = [];
-  const hoursPerDose = 24 / 4; // 4 doses per day
-
-  for (let i = 0; i < 4; i++) {
-    const startHour = i * hoursPerDose;
-    const endHour = (i + 1) * hoursPerDose;
-
-    // Determine status based on adherence percentage
-    let status: DoseSegment['status'] = 'PENDING';
-    if (Math.random() * 100 < adherence) {
-      status = 'DOSE_TAKEN';
-    } else if (Math.random() > 0.5) {
-      status = 'DOSE_MISSED';
-    }
-
-    segments.push({ startHour, endHour, status });
-  }
-
-  return segments;
-};
-
-
-
 export default function CaregiverDashboard() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
@@ -170,7 +121,6 @@ export default function CaregiverDashboard() {
   } = useCollectionSWR<Patient>({
     cacheKey: `patients:${user?.id}`,
     query: isInitialized && !initializationError ? patientsQuery : null,
-    initialData: STATIC_PATIENTS,
   });
 
   // Log patients query results
@@ -400,233 +350,104 @@ export default function CaregiverDashboard() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-100">
-      {/* Header */}
-      <View className="flex-row items-center justify-between bg-white px-4 py-3 border-b border-gray-200">
-        <View>
-          <Text className="text-2xl font-extrabold text-gray-900">PILDHORA</Text>
-          <Text className="text-sm text-gray-500">Hola, {displayName}</Text>
+    <>
+      {/* Patient Selector */}
+      {patientsWithDevices.length > 0 && (
+        <View className="px-4 py-3 bg-white border-b border-gray-200">
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-3">
+            {patientsWithDevices.map((patient) => (
+              <TouchableOpacity
+                key={patient.id}
+                className={`px-4 py-2 rounded-full ${
+                  selectedPatient?.id === patient.id
+                    ? 'bg-blue-600'
+                    : 'bg-gray-200 border border-gray-300'
+                }`}
+                onPress={() => handlePatientSelect(patient)}
+              >
+                <Text
+                  className={`font-semibold ${
+                    selectedPatient?.id === patient.id ? 'text-white' : 'text-gray-700'
+                  }`}
+                >
+                  {patient.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
-        <View className="flex-row items-center gap-3">
-          {/* Emergency icon-only button */}
-          <TouchableOpacity
-            className="w-10 h-10 rounded-full bg-red-500 items-center justify-center shadow-sm"
-            onPress={handleEmergency}
-            accessibilityLabel="Emergencia"
-            accessibilityHint="Toca para ver opciones de emergencia"
-          >
-            <Ionicons name="alert" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            className="w-10 h-10 rounded-full bg-gray-700 items-center justify-center shadow-sm"
-            onPress={async () => {
-              await dispatch(logout());
-              router.replace('/auth/signup');
-            }}
-            accessibilityLabel="Salir"
-            accessibilityHint="Cerrar sesión y volver al registro"
-          >
-            <Ionicons name="log-out" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Emergency Modal */}
-      {Platform.OS !== 'ios' && (
-        <Modal
-          visible={modalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setModalVisible(false)}
-        >
-          <View className="flex-1 bg-black/50 items-center justify-center px-6">
-            <View className="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl">
-              <View className="p-6">
-                <Text className="text-2xl font-bold text-gray-900 mb-2">Emergencia</Text>
-                <Text className="text-gray-600 mb-6 text-center">Selecciona una opción:</Text>
-                <View className="gap-3">
-                  <TouchableOpacity
-                    className="bg-red-600 rounded-xl px-4 py-4 items-center shadow-sm active:bg-red-700"
-                    onPress={() => callEmergency('911')}
-                  >
-                    <Text className="text-white font-bold text-lg">Llamar 911</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    className="bg-orange-500 rounded-xl px-4 py-4 items-center shadow-sm active:bg-orange-600"
-                    onPress={() => callEmergency('112')}
-                  >
-                    <Text className="text-white font-bold text-lg">Llamar 112</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    className="bg-gray-100 rounded-xl px-4 py-4 items-center active:bg-gray-200"
-                    onPress={() => setModalVisible(false)}
-                  >
-                    <Text className="text-gray-800 font-semibold text-lg">Cancelar</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </View>
-        </Modal>
       )}
 
-      {/* Scrollable Content */}
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        {/* Patient Selector */}
-        {patientsWithDevices.length > 0 && (
-          <View className="px-4 py-3 bg-white border-b border-gray-200">
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-3">
-              {patientsWithDevices.map((patient) => (
-                <TouchableOpacity
-                  key={patient.id}
-                  className={`px-4 py-2 rounded-full ${
-                    selectedPatient?.id === patient.id
-                      ? 'bg-blue-600'
-                      : 'bg-gray-200 border border-gray-300'
-                  }`}
-                  onPress={() => handlePatientSelect(patient)}
-                >
-                  <Text
-                    className={`font-semibold ${
-                      selectedPatient?.id === patient.id ? 'text-white' : 'text-gray-700'
-                    }`}
-                  >
-                    {patient.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 20 }}>
         {selectedPatient ? (
-          <>
-            {/* Patient Status Card */}
-            <View className="p-4">
-              <View className="bg-white rounded-2xl p-4">
-                <Text className="text-lg font-bold mb-2">Estado de {selectedPatient.name}</Text>
-                <View className="items-center justify-center">
-                  <DoseRing 
-                    size={220} 
-                    strokeWidth={18} 
-                    segments={selectedPatient.doseSegments || []} 
-                    accessibilityLabel={`Anillo de dosis de ${selectedPatient.name}`} 
-                  />
-                </View>
-                {selectedPatient.deviceState && (
-                  <View className="flex-row justify-between items-center mt-4 pt-3 border-t border-gray-200">
-                    <Text className="text-sm text-gray-600">
-                      Batería: {selectedPatient.deviceState.battery_level}%
-                    </Text>
-                    <Text className={`text-sm font-medium ${
-                      selectedPatient.deviceState.is_online ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {selectedPatient.deviceState.is_online ? 'En línea' : 'Desconectado'}
-                    </Text>
-                  </View>
-                )}
-              </View>
+          <View className="p-4">
+            <View className="bg-white rounded-2xl p-4 items-center">
+              <Text className="text-2xl font-bold mb-4">Adherencia Diaria</Text>
+              <DoseRing
+                size={250}
+                strokeWidth={20}
+                segments={selectedPatient.doseSegments || []}
+                accessibilityLabel={`Anillo de dosis de ${selectedPatient.name}`}
+              />
             </View>
 
-            {/* Patient History */}
-            <View className="px-4">
-              <View className="bg-white rounded-2xl p-4">
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-row items-center gap-3">
-                    <Ionicons name="time" size={22} color="#1C1C1E" />
-                    <View>
-                      <Text className="text-lg font-bold">Historial de {selectedPatient.name}</Text>
-                      <Text className="text-gray-600">Dosis y eventos anteriores</Text>
+            <View className="bg-white rounded-2xl p-4 mt-4">
+              <Text className="text-xl font-bold mb-4">Dispositivo</Text>
+              {selectedPatient.deviceState ? (
+                <>
+                  <View className="flex-row justify-between items-center">
+                    <View className="flex-row items-center">
+                      <Ionicons name="watch-outline" size={24} color="gray" />
+                      <Text className="text-lg ml-2">Nivel de Batería</Text>
                     </View>
+                    <Text className="text-lg font-semibold">{selectedPatient.deviceState.battery_level}%</Text>
                   </View>
-                </View>
-                
-                {patientIntakes.length === 0 ? (
-                  <View className="flex-1 justify-center items-center py-20">
-                    <Ionicons name="time-outline" size={48} color="#9CA3AF" />
-                    <Text className="text-gray-500 mt-4 text-center">
-                      No hay registros en el historial
+                  <View className="flex-row justify-between items-center mt-4">
+                    <View className="flex-row items-center">
+                      <Ionicons name="wifi-outline" size={24} color="gray" />
+                      <Text className="text-lg ml-2">Estado</Text>
+                    </View>
+                    <Text className={`text-lg font-semibold ${selectedPatient.deviceState.is_online ? 'text-green-500' : 'text-red-500'}`}>
+                      {selectedPatient.deviceState.is_online ? 'En Línea' : 'Desconectado'}
                     </Text>
                   </View>
-                ) : (
-                  <View className="mt-4">
-                    {patientIntakes.map((record) => (
-                      <View
-                        key={record.id}
-                        className="bg-white rounded-xl p-4 mb-3 border border-gray-200"
-                      >
-                        <View className="flex-row items-center">
-                          {/* Status indicator */}
-                          <View
-                            className={`w-1 h-12 rounded-full mr-3 ${
-                              record.status === IntakeStatus.TAKEN
-                                ? "bg-green-500"
-                                : "bg-red-500"
-                            }`}
-                          />
-                          
-                          {/* Medication info */}
-                          <View className="flex-1">
-                            <Text className="font-semibold text-gray-900 text-base">
-                              {record.medicationName}
-                            </Text>
-                            <Text className="text-gray-600 text-sm">
-                              {record.dosage}
-                            </Text>
-                            <Text className="text-gray-500 text-sm">
-                              {formatTime(record.scheduledTime)}
-                            </Text>
-                          </View>
-                          
-                          {/* Status badge */}
-                          <View
-                            className={`px-3 py-1 rounded-full flex-row items-center ${
-                              record.status === IntakeStatus.TAKEN
-                                ? "bg-green-100"
-                                : "bg-red-100"
-                            }`}
-                          >
-                            <Ionicons
-                              name={record.status === IntakeStatus.TAKEN ? "checkmark-circle" : "close-circle"}
-                              size={16}
-                              color={record.status === IntakeStatus.TAKEN ? "#10B981" : "#EF4444"}
-                            />
-                            <Text
-                              className={`ml-1 text-sm font-medium ${
-                                record.status === IntakeStatus.TAKEN ? "text-green-700" : "text-red-700"
-                              }`}
-                            >
-                              {record.status === IntakeStatus.TAKEN ? "Tomado" : "Olvidado"}
-                            </Text>
-                          </View>
-                        </View>
-                        
-                        {/* Taken time if available */}
-                        {record.takenAt && (
-                          <Text className="text-gray-500 text-xs mt-2 ml-4">
-                            Tomado a las {formatTime(record.takenAt)}
-                          </Text>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
+                </>
+              ) : (
+                <Text className="text-gray-500">No hay dispositivo vinculado.</Text>
+              )}
+              <TouchableOpacity
+                onPress={() => router.push({ pathname: '/caregiver/chat', params: { patientId: selectedPatient.id, patientName: selectedPatient.name }})}
+                className="bg-blue-500 p-3 rounded-lg mt-4"
+              >
+                <Text className="text-white text-center font-bold">Chatear con {selectedPatient.name}</Text>
+              </TouchableOpacity>
             </View>
-          </>
+          </View>
         ) : (
-          /* No Patients State */
           <View className="flex-1 justify-center items-center py-20">
             <Ionicons name="people-outline" size={48} color="#9CA3AF" />
             <Text className="text-gray-600 mt-4 text-center">
               No hay pacientes asignados a tu cuenta
             </Text>
             <Text className="text-gray-500 text-sm text-center mt-1">
-              Los pacientes aparecerán aquí cuando se te asignen
+              Usa el botón de abajo para vincular un nuevo dispositivo.
             </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/caregiver/add-device')}
+              className="bg-green-500 p-3 rounded-lg mt-6"
+            >
+              <Text className="text-white text-center font-bold">Vincular Dispositivo</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+      {/* Add Patient FAB */}
+      <TouchableOpacity
+        onPress={() => router.push('/caregiver/add-device')}
+        className="absolute bottom-6 right-6 bg-green-500 w-16 h-16 rounded-full items-center justify-center shadow-lg"
+      >
+        <Ionicons name="add-outline" size={32} color="white" />
+      </TouchableOpacity>
+    </>
   );
 }

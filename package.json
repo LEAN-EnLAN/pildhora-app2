@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "dotenv -e .env -- expo start",
+    "start": "dotenv -e .env -- expo start --port 8082",
     "android": "dotenv -e .env -- expo start --android",
     "ios": "dotenv -e .env -- expo start --ios",
     "web": "dotenv -e .env -- expo start --web",
@@ -17,6 +17,7 @@
     "@reduxjs/toolkit": "^2.9.2",
     "expo": "^54.0.23",
     "expo-constants": "~18.0.10",
+    "expo-document-picker": "~14.0.7",
     "expo-linking": "~8.0.8",
     "expo-notifications": "~0.32.12",
     "expo-router": "~6.0.14",
