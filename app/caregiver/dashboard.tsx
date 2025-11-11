@@ -114,7 +114,7 @@ export default function CaregiverDashboard() {
           const intakesWithDates = data.intakes.map(intake => ({
             ...intake,
             scheduledTime: new Date(intake.scheduledTime),
-            takenAt: intake.takenAt ? new Date(intake.takenAt) : null,
+            takenAt: intake.takenAt ? new Date(intake.takenAt) : undefined,
           }));
           setPatientIntakes(intakesWithDates);
         } catch (error: any) {
@@ -299,7 +299,7 @@ export default function CaregiverDashboard() {
               )}
               <Button
                 variant="primary"
-                onPress={() => router.push({ pathname: '/caregiver/chat', params: { patientId: selectedPatient.id, patientName: selectedPatient.name }})}
+                onPress={() => router.push({ pathname: '/caregiver/chat', params: { patientId: selectedPatient.id, patientName: selectedPatient.name } })}
               >
                 Chatear con {selectedPatient.name}
               </Button>
