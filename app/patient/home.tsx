@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, Modal, Linking, ScrollView, ActionSheetIOS, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, FlatList, Alert, Modal, Linking, ScrollView, ActionSheetIOS, Platform } from 'react-native';
+import { Container } from '../../src/components/ui';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -207,40 +207,7 @@ export default function PatientHome() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-100">
-      {/* Android dropdown menu */}
-      {Platform.OS !== 'ios' && accountMenuVisible && (
-        <>
-          <TouchableOpacity
-            className="absolute inset-0 z-40 bg-black/20"
-            onPress={() => setAccountMenuVisible(false)}
-            activeOpacity={1}
-          />
-          <View className="absolute right-4 top-16 bg-white rounded-2xl shadow-xl border border-gray-200 min-w-56 z-50 overflow-hidden">
-            <TouchableOpacity
-              className="px-4 py-4 border-b border-gray-100 flex-row items-center"
-              onPress={handleLogout}
-            >
-              <Ionicons name="log-out-outline" size={20} color="#374151" />
-              <Text className="ml-3 text-gray-700 font-medium text-base">Salir de sesión</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="px-4 py-4 border-b border-gray-100 flex-row items-center"
-              onPress={handleConfiguraciones}
-            >
-              <Ionicons name="settings-outline" size={20} color="#374151" />
-              <Text className="ml-3 text-gray-700 font-medium text-base">Configuraciones</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="px-4 py-4 flex-row items-center"
-              onPress={handleMiDispositivo}
-            >
-              <Ionicons name="hardware-chip-outline" size={20} color="#374151" />
-              <Text className="ml-3 text-gray-700 font-medium text-base">Mi dispositivo</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
+    <Container className="flex-1 bg-gray-100">
       {/* Header */}
       <View className="flex-row items-center justify-between bg-white px-4 py-3 border-b border-gray-200">
         <View>
@@ -250,20 +217,20 @@ export default function PatientHome() {
         <View className="flex-row items-center gap-3">
           {/* Emergency icon-only button */}
           <Button
-            onPress={handleEmergency}
             variant="danger"
             size="sm"
+            onPress={handleEmergency}
           >
             <Ionicons name="alert" size={20} color="#FFFFFF" />
           </Button>
           
           {/* Account button with action sheet */}
           <Button
-            onPress={handleAccountMenu}
             variant="secondary"
             size="sm"
+            onPress={handleAccountMenu}
           >
-            <Ionicons name="person" size={20} color="#FFFFFF" />
+            <Ionicons name="person" size={20} color="#374151" />
           </Button>
         </View>
       </View>
@@ -283,23 +250,23 @@ export default function PatientHome() {
                 <Text className="text-gray-600 mb-6 text-center">Selecciona una opción:</Text>
                 <View className="gap-3">
                   <Button
-                    onPress={() => callEmergency('911')}
                     variant="danger"
                     size="lg"
+                    onPress={() => callEmergency('911')}
                   >
                     Llamar 911
                   </Button>
                   <Button
-                    onPress={() => callEmergency('112')}
                     variant="secondary"
                     size="lg"
+                    onPress={() => callEmergency('112')}
                   >
                     Llamar 112
                   </Button>
                   <Button
-                    onPress={() => setModalVisible(false)}
                     variant="secondary"
                     size="lg"
+                    onPress={() => setModalVisible(false)}
                   >
                     Cancelar
                   </Button>
@@ -310,114 +277,112 @@ export default function PatientHome() {
         </Modal>
       )}
 
-      {/* Scrollable Content */}
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        {/* DoseRing section */}
-        <View className="p-4">
-        <View className="bg-white rounded-2xl p-4">
-          <Text className="text-lg font-bold mb-2">Estado del día</Text>
-          <View className="items-center justify-center">
-            <DoseRing size={220} strokeWidth={18} segments={doseSegments} accessibilityLabel="Anillo de dosis del día" />
-          </View>
-        </View>
-      </View>
-
-      {/* Upcoming medication */}
-      <View className="px-4">
-        <View className="bg-white rounded-2xl p-4">
-          <Text className="text-lg font-bold mb-2">Próxima dosis</Text>
-          {upcoming ? (
-            <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="text-base font-semibold text-gray-900">{upcoming.med.name}</Text>
-                <Text className="text-gray-600">{upcoming.med.dosage}</Text>
-                <Text className="text-gray-600">{formatHourDecimal(upcoming.next)}</Text>
-              </View>
-              <Button
-                onPress={handleTakeUpcomingMedication}
-                variant="primary"
-                size="md"
-                disabled={takingLoading}
-              >
-                {takingLoading ? 'Tomando...' : 'Tomar medicación'}
-              </Button>
-            </View>
-          ) : (
-            <Text className="text-gray-500">No hay dosis próximas para hoy.</Text>
-          )}
-        </View>
-      </View>
-
-      {/* History widget moved from header */}
-      <View className="px-4 mt-2">
-        <View className="bg-white rounded-2xl p-4">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-3">
-              <Ionicons name="time" size={22} color="#1C1C1E" />
-              <View>
-                <Text className="text-lg font-bold">Historial</Text>
-                <Text className="text-gray-600">Dosis y eventos anteriores</Text>
-              </View>
-            </View>
-            <Button
-              onPress={handleHistory}
-              variant="primary"
-              size="sm"
-            >
-              Abrir
-            </Button>
-          </View>
-        </View>
-      </View>
-
       {/* Today's schedule list */}
-      <View className="px-4 mt-2">
-        <Card className="rounded-2xl">
-          <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-lg font-bold">Hoy</Text>
-            <Link href="/patient/medications" asChild>
-              <Button
-                variant="primary"
-                size="md"
-                onPress={() => {}}
-              >
-                Mis Medicamentos
-              </Button>
-            </Link>
-          </View>
-
-          {loading ? (
-            <Text className="text-gray-600">Cargando...</Text>
-          ) : (
-            <View className="gap-3">
-              {medications.filter(isScheduledToday).map((item) => (
-                <View key={item.id} className="flex-row items-center justify-between">
-                  <View className="flex-1">
-                    <Text className="text-base font-semibold text-gray-900 mb-1">{item.name}</Text>
-                    <Text className="text-gray-600 mb-1">{item.dosage}</Text>
-                    {(() => {
-                      const next = getNextTimeToday(item);
-                      return next !== null ? (
-                        <Text className="text-gray-600">Próxima: {formatHourDecimal(next)}</Text>
-                      ) : null;
-                    })()}
-                  </View>
-                  <Link href={`/patient/medications/${item.id}`} asChild>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onPress={() => {}}
-                    >
-                      Abrir
-                    </Button>
-                  </Link>
+      <FlatList
+        data={medications.filter(isScheduledToday)}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={() => (
+          <>
+            {/* DoseRing section */}
+            <View className="p-4">
+              <Card>
+                <Text className="text-lg font-bold mb-2">Estado del día</Text>
+                <View className="items-center justify-center">
+                  <DoseRing size={220} strokeWidth={18} segments={doseSegments} accessibilityLabel="Anillo de dosis del día" />
                 </View>
-              ))}
+              </Card>
             </View>
-          )}
-        </Card>
-      </View>
-      </ScrollView>
-    </SafeAreaView>
+
+            {/* Upcoming medication */}
+            <View className="px-4">
+              <Card>
+                <Text className="text-lg font-bold mb-2">Próxima dosis</Text>
+                {upcoming ? (
+                  <View className="flex-row items-center justify-between">
+                    <View>
+                      <Text className="text-base font-semibold text-gray-900">{upcoming.med.name}</Text>
+                      <Text className="text-gray-600">{upcoming.med.dosage}</Text>
+                      <Text className="text-gray-600">{formatHourDecimal(upcoming.next)}</Text>
+                    </View>
+                    <Button
+                      variant="primary"
+                      size="md"
+                      onPress={handleTakeUpcomingMedication}
+                      disabled={takingLoading}
+                    >
+                      {takingLoading ? 'Cargando...' : 'Tomar medicación'}
+                    </Button>
+                  </View>
+                ) : (
+                  <Text className="text-gray-500">No hay dosis próximas para hoy.</Text>
+                )}
+              </Card>
+            </View>
+
+            {/* History widget moved from header */}
+            <View className="px-4 mt-2">
+              <Card>
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center gap-3">
+                    <Ionicons name="time" size={22} color="#1C1C1E" />
+                    <View>
+                      <Text className="text-lg font-bold">Historial</Text>
+                      <Text className="text-gray-600">Dosis y eventos anteriores</Text>
+                    </View>
+                  </View>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onPress={handleHistory}
+                  >
+                    Abrir
+                  </Button>
+                </View>
+              </Card>
+            </View>
+
+            <View className="px-4 mt-2">
+              <View className="flex-row justify-between items-center mb-4">
+                <Text className="text-lg font-bold">Hoy</Text>
+                <Link href="/patient/medications" asChild>
+                  <Button
+                    variant="primary"
+                    size="md"
+                  >
+                    Mis Medicamentos
+                  </Button>
+                </Link>
+              </View>
+            </View>
+          </>
+        )}
+        renderItem={({ item }) => (
+          <View className="px-4 mt-2">
+            <Card>
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1">
+                  <Text className="text-base font-semibold text-gray-900 mb-1">{item.name}</Text>
+                  <Text className="text-gray-600 mb-1">{item.dosage}</Text>
+                  {(() => {
+                    const next = getNextTimeToday(item);
+                    return next !== null ? (
+                      <Text className="text-gray-600">Próxima: {formatHourDecimal(next)}</Text>
+                    ) : null;
+                  })()}
+                </View>
+                <Link href={`/patient/medications/${item.id}`} asChild>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                  >
+                    Abrir
+                  </Button>
+                </Link>
+              </View>
+            </Card>
+          </View>
+        )}
+      />
+    </Container>
   );
 }

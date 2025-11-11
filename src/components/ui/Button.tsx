@@ -25,9 +25,9 @@ export const Button: React.FC<ButtonProps> = ({
     danger: "bg-red-500"
   };
   const sizeClasses = {
-    sm: "px-4 py-2",
-    md: "px-5 py-3",
-    lg: "px-6 py-4"
+    sm: "px-3 py-2",
+    md: "px-4 py-3",
+    lg: "px-5 py-4"
   };
   const textClasses = {
     primary: "text-white",
@@ -35,9 +35,9 @@ export const Button: React.FC<ButtonProps> = ({
     danger: "text-white"
   };
   const textSizeClasses = {
-    sm: "text-sm",
-    md: "text-base",
-    lg: "text-lg"
+    sm: "text-base",
+    md: "text-lg",
+    lg: "text-xl"
   };
   
   const content = typeof children === 'string'

@@ -276,9 +276,9 @@ export default function LinkDeviceScreen() {
           onChangeText={setDeviceId}
           autoCapitalize="none"
         />
-        <TouchableOpacity style={styles.button} onPress={handleLink} disabled={loading}>
-          <Text style={styles.buttonText}>{loading ? 'Enlazando...' : 'Enlazar'}</Text>
-        </TouchableOpacity>
+        <Button onPress={handleLink} disabled={loading}>
+          {loading ? 'Enlazando...' : 'Enlazar'}
+        </Button>
         {error && <Text style={{ color: '#FF3B30' }}>{error}</Text>}
       </View>
 
@@ -295,9 +295,9 @@ export default function LinkDeviceScreen() {
                 <View style={styles.listItemRow}>
                   <Text style={styles.listItemText}>{id}</Text>
                   <Button
-                    onPress={() => handleUnlink(id)}
                     variant="secondary"
-                    size="md"
+                    size="sm"
+                    onPress={() => handleUnlink(id)}
                   >
                     Desenlazar
                   </Button>
@@ -311,15 +311,15 @@ export default function LinkDeviceScreen() {
                     <Text style={styles.infoText}>Modo de alarma</Text>
                     <View style={styles.chipRow}>
                       {['off', 'sound', 'led', 'both'].map((mode) => (
-                        <TouchableOpacity
+                        <Button
                           key={mode}
-                          style={[styles.chip, stats?.alarmMode === mode ? styles.chipActive : null]}
+                          className={`chip ${stats?.alarmMode === mode ? 'chipActive' : ''}`}
                           onPress={() => setAlarmMode(id, mode as any)}
                         >
                           <Text style={{ color: '#1C1C1E' }}>
                             {mode === 'off' ? 'Apagado' : mode === 'sound' ? 'Sonido' : mode === 'led' ? 'Luz' : 'Ambos'}
                           </Text>
-                        </TouchableOpacity>
+                        </Button>
                       ))}
                     </View>
                   </View>
@@ -353,9 +353,9 @@ export default function LinkDeviceScreen() {
                     />
                   </View>
                   <View style={styles.statsRow}>
-                    <TouchableOpacity style={[styles.button, { flex: 1 }]} onPress={() => saveDeviceConfig(id)} disabled={stats?.saving}>
-                      <Text style={styles.buttonText}>{stats?.saving ? 'Guardando...' : 'Guardar cambios'}</Text>
-                    </TouchableOpacity>
+                    <Button onPress={() => saveDeviceConfig(id)} disabled={stats?.saving}>
+                      {stats?.saving ? 'Guardando...' : 'Guardar cambios'}
+                    </Button>
                   </View>
                   {stats?.saveError ? <Text style={{ color: '#FF3B30' }}>{stats?.saveError}</Text> : null}
                 </View>
@@ -366,9 +366,9 @@ export default function LinkDeviceScreen() {
       </View>
 
       <View style={styles.card}>
-        <TouchableOpacity style={styles.button} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Volver</Text>
-        </TouchableOpacity>
+        <Button onPress={() => router.back()}>
+          Volver
+        </Button>
       </View>
     </ScrollView>
   );

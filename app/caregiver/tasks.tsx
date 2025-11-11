@@ -90,9 +90,9 @@ export default function TasksScreen() {
       <View className="p-4 flex-row justify-between items-center">
         <Text className="text-2xl font-bold">Tareas</Text>
         <Button
-          onPress={() => setModalVisible(true)}
           variant="primary"
           size="sm"
+          onPress={() => setModalVisible(true)}
         >
           <Ionicons name="add" size={24} color="white" />
         </Button>
@@ -102,14 +102,14 @@ export default function TasksScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View className="bg-white p-4 m-2 rounded-lg flex-row items-center justify-between">
-            <TouchableOpacity onPress={() => toggleCompletion(item)} className="flex-row items-center flex-1">
+            <Button onPress={() => toggleCompletion(item)} className="flex-row items-center flex-1">
               <Ionicons name={item.completed ? 'checkbox' : 'square-outline'} size={24} color={item.completed ? 'green' : 'gray'} />
               <Text className={`ml-4 flex-1 ${item.completed ? 'line-through text-gray-500' : 'text-black'}`}>{item.title}</Text>
-            </TouchableOpacity>
+            </Button>
             <Button
-              onPress={() => handleDeleteTask(item.id)}
               variant="secondary"
               size="sm"
+              onPress={() => handleDeleteTask(item.id)}
             >
               <Ionicons name="trash-outline" size={22} color="red" />
             </Button>
@@ -132,16 +132,16 @@ export default function TasksScreen() {
               className="bg-gray-200 p-3 rounded-lg mb-4"
             />
             <Button
-              onPress={handleAddTask}
               variant="primary"
               size="md"
+              onPress={handleAddTask}
             >
               Agregar
             </Button>
             <Button
-              onPress={() => setModalVisible(false)}
               variant="secondary"
               size="md"
+              onPress={() => setModalVisible(false)}
             >
               Cancelar
             </Button>
