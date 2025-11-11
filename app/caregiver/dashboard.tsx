@@ -46,9 +46,9 @@ export default function CaregiverDashboard() {
     // This is a mock implementation. In a real app, you'd generate
     // segments based on actual medication schedules and intake records.
     return [
-      { startHour: 8, endHour: 9, status: adherence > 25 ? 'TAKEN' : 'PENDING' },
-      { startHour: 13, endHour: 14, status: adherence > 50 ? 'TAKEN' : 'PENDING' },
-      { startHour: 20, endHour: 21, status: adherence > 75 ? 'TAKEN' : 'PENDING' },
+      { startHour: 8, endHour: 9, status: adherence > 25 ? 'DOSE_TAKEN' : 'PENDING' },
+      { startHour: 13, endHour: 14, status: adherence > 50 ? 'DOSE_TAKEN' : 'PENDING' },
+      { startHour: 20, endHour: 21, status: adherence > 75 ? 'DOSE_TAKEN' : 'PENDING' },
     ];
   };
 
