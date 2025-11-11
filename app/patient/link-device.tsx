@@ -296,9 +296,9 @@ export default function LinkDeviceScreen() {
                 <View style={styles.listItemRow}>
                   <Text style={styles.listItemText}>{id}</Text>
                   <Button
-                    variant="secondary"
-                    size="sm"
                     onPress={() => handleUnlink(id)}
+                    variant="secondary"
+                    size="md"
                   >
                     Desenlazar
                   </Button>
@@ -314,7 +314,7 @@ export default function LinkDeviceScreen() {
                       {['off', 'sound', 'led', 'both'].map((mode) => (
                         <Button
                           key={mode}
-                          style={[styles.chip, stats?.alarmMode === mode ? styles.chipActive : null]}
+                          style={Object.assign({}, styles.chip, stats?.alarmMode === mode ? styles.chipActive : {})}
                           onPress={() => setAlarmMode(id, mode as any)}
                         >
                           <Text style={styles.chipText}>

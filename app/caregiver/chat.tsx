@@ -23,7 +23,11 @@ export default function ChatScreen() {
     }
   }, [navigation, patientName, user, patientId]);
 
-  const { data: messages = [], mutate } = useCollectionSWR<Message>(messagesQuery);
+  const cacheKey = user?.id && patientId ? `messages:${user.id}:${patientId}` : null;
+  const { data: messages = [] } = useCollectionSWR<Message>({
+    cacheKey,
+    query: messagesQuery,
+  });
 
   const handleSend = async () => {
     if (newMessage.trim() && user && patientId) {
@@ -35,7 +39,7 @@ export default function ChatScreen() {
           senderId: user.id,
           receiverId: patientId as string,
         });
-        mutate();
+        // Data will be updated automatically through the real-time listener
       } catch (error) {
         console.error("Error sending message:", error);
         Alert.alert("Error", "No se pudo enviar el mensaje.");

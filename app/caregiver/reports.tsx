@@ -21,7 +21,11 @@ export default function ReportsScreen() {
     }
   }, [user]);
 
-  const { data: reports = [], mutate } = useCollectionSWR<Report>(reportsQuery);
+  const cacheKey = user?.id ? `reports:${user.id}` : null;
+  const { data: reports = [] } = useCollectionSWR<Report>({
+    cacheKey,
+    query: reportsQuery,
+  });
 
   const handleUploadReport = async () => {
     try {
@@ -53,7 +57,7 @@ export default function ReportsScreen() {
         caregiverId: user.id,
       });
 
-      mutate();
+      // Data will be updated automatically through the real-time listener
       Alert.alert("Éxito", "El reporte se ha subido correctamente.");
 
     } catch (error) {

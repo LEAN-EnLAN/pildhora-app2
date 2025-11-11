@@ -20,12 +20,16 @@ export default function TasksScreen() {
     }
   }, [user]);
 
-  const { data: tasks = [], mutate } = useCollectionSWR<Task>(tasksQuery);
+  const cacheKey = user?.id ? `tasks:${user.id}` : null;
+  const { data: tasks = [] } = useCollectionSWR<Task>({
+    cacheKey,
+    query: tasksQuery,
+  });
 
   const toggleCompletion = async (task: Task) => {
     try {
       await updateTask(task.id, { completed: !task.completed });
-      mutate();
+      // Data will be updated automatically through the real-time listener
     } catch (error) {
       console.error("Error updating task:", error);
       Alert.alert("Error", "No se pudo actualizar la tarea.");
@@ -43,7 +47,7 @@ export default function TasksScreen() {
           patientId: '',
           dueDate: new Date(),
         });
-        mutate();
+        // Data will be updated automatically through the real-time listener
         setNewTaskText('');
         setModalVisible(false);
       } catch (error) {
@@ -65,7 +69,7 @@ export default function TasksScreen() {
           onPress: async () => {
             try {
               await deleteTask(taskId);
-              mutate();
+              // Data will be updated automatically through the real-time listener
             } catch (error) {
               console.error("Error deleting task:", error);
               Alert.alert("Error", "No se pudo eliminar la tarea.");
