@@ -21,7 +21,11 @@ export default function ReportsScreen() {
     }
   }, [user]);
 
-  const { data: reports = [], mutate } = useCollectionSWR<Report>(reportsQuery);
+  const cacheKey = user?.id ? `reports:${user.id}` : null;
+  const { data: reports = [] } = useCollectionSWR<Report>({
+    cacheKey,
+    query: reportsQuery,
+  });
 
   const handleUploadReport = async () => {
     try {

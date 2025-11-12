@@ -296,9 +296,9 @@ export default function LinkDeviceScreen() {
                 <View style={styles.listItemRow}>
                   <Text style={styles.listItemText}>{id}</Text>
                   <Button
-                    variant="secondary"
-                    size="sm"
                     onPress={() => handleUnlink(id)}
+                    variant="secondary"
+                    size="md"
                   >
                     Desenlazar
                   </Button>

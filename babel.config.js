@@ -3,17 +3,8 @@ module.exports = function (api) {
   return {
     presets: ["babel-preset-expo"],
     plugins: [
-      // Add module resolver plugin to handle import aliases
-      [
-        'module-resolver',
-        {
-          root: ['./src'],
-          alias: {
-            // Alias react-native Slider to @react-native-community/slider
-            'react-native/Libraries/Components/Slider/Slider': '@react-native-community/slider',
-          },
-        },
-      ],
+      // NativeWind plugin MUST come first for proper transformation
+      'nativewind/babel',
       // Reanimated plugin must be listed last
       'react-native-reanimated/plugin',
     ],
