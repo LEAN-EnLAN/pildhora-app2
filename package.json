@@ -1,7 +1,7 @@
 {
   "name": "pildhora-app",
   "version": "1.0.0",
-  "main": "node_modules/expo/AppEntry.js",
+  "main": "expo-router/entry",
   "scripts": {
     "start": "dotenv -e .env -- expo start --port 8082",
     "android": "dotenv -e .env -- expo start --android",

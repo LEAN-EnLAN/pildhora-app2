@@ -223,7 +223,7 @@ export default function CaregiverDashboard() {
             <Text style={styles.warningMessage}>
               {isIndexError ? 'Los índices de la base de datos se están configurando. Esto puede tardar unos minutos. Por favor, intenta nuevamente en breve.' : (patientsError?.message || 'Verifica tu conexión e intenta nuevamente.')}
             </Text>
-            <Button variant="primary" size="medium" onPress={handleRetryInitialization} accessibilityLabel="Reintentar" accessibilityHint="Intentar cargar datos nuevamente" />
+            <Button variant="primary" size="md" onPress={handleRetryInitialization}>Reintentar</Button>
           </Card>
         </View>
       </Container>

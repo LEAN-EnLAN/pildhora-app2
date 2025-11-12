@@ -285,7 +285,7 @@ export default function PatientHome() {
               <View style={styles.todayHeader}>
                 <Text style={styles.cardTitle}>Hoy</Text>
                 <Link href="/patient/medications" asChild>
-                  <Button variant="primary" size="md">Mis Medicamentos</Button>
+                  <Button variant="primary" size="md" onPress={() => {}}>Mis Medicamentos</Button>
                 </Link>
               </View>
             </View>
@@ -304,7 +304,7 @@ export default function PatientHome() {
                   })()}
                 </View>
                 <Link href={`/patient/medications/${item.id}`} asChild>
-                  <Button variant="secondary" size="sm">Abrir</Button>
+                  <Button variant="secondary" size="sm" onPress={() => {}}>Abrir</Button>
                 </Link>
               </View>
             </Card>
