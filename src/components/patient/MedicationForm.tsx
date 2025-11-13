@@ -18,6 +18,7 @@ interface Props {
   mode: Mode;
   medication?: Medication | undefined;
   onDelete?: () => void;
+  patientIdOverride?: string;
 }
 
 interface FormState {
@@ -38,11 +39,11 @@ interface FormErrors {
   reminderDays?: string;
 }
 
-export default function MedicationForm({ mode, medication, onDelete }: Props) {
+export default function MedicationForm({ mode, medication, onDelete, patientIdOverride }: Props) {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
   const { user } = useSelector((state: RootState) => state.auth);
-  const patientId = user?.id;
+  const patientId = patientIdOverride || user?.id;
 
   const [form, setForm] = useState<FormState>({
     name: '',

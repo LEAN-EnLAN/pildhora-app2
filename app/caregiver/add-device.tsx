@@ -5,8 +5,11 @@ import { Stack, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { AppDispatch, RootState } from '../../src/store';
-import { doc, getDoc } from 'firebase/firestore';
-import { getDbInstance } from '../../src/services/firebase';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { linkDeviceToUser } from '../../src/services/deviceLinking';
+import { getDbInstance, getRdbInstance } from '../../src/services/firebase';
+import { ref, get as rdbGet } from 'firebase/database';
 import { startDeviceListener } from '../../src/store/slices/deviceSlice';
 
 type Step = 'enterId' | 'linking' | 'success' | 'error';
@@ -28,8 +31,20 @@ export default function AddPatientScreen() {
       const deviceRef = doc(db, 'devices', deviceId.trim());
       const snap = await getDoc(deviceRef);
       if (!snap.exists()) {
-        Alert.alert('Aviso', 'No se encontró el dispositivo en la base de datos. Asegúrate de que el ESP8266 esté conectado a Wi‑Fi y enviando su estado.');
+        const caregiverUid = getAuth()?.currentUser?.uid;
+        await setDoc(deviceRef, {
+          linkedUsers: caregiverUid ? [caregiverUid] : [],
+          metadata: { model: 'ESP8266', notes: 'Dispositivo de prueba siempre activo' },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
       }
+
+      const caregiverUid = getAuth()?.currentUser?.uid;
+      if (caregiverUid) {
+        await linkDeviceToUser(caregiverUid, deviceId.trim());
+      }
+
       dispatch(startDeviceListener(deviceId.trim()));
       setFoundPatientName('');
       setStep('success');

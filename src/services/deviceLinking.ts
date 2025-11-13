@@ -35,16 +35,11 @@ export async function linkDeviceToUser(userId: string, deviceId: string): Promis
   
   // Write to RTDB first at /users/{uid}/devices/{deviceID} as expected by Cloud Functions
   const deviceRef = ref(rdb, `users/${userId}/devices/${deviceId}`);
-  const deviceData = {
-    deviceId,
-    linkedAt: serverTimestamp(),
-    status: 'active'
-  };
   
-  console.log('[DEBUG] Attempting to write to RTDB:', { path: `users/${userId}/devices/${deviceId}`, deviceData });
+  console.log('[DEBUG] Attempting to write to RTDB:', { path: `users/${userId}/devices/${deviceId}`, value: true });
   
   try {
-    await set(deviceRef, deviceData);
+    await set(deviceRef, true);
     console.log('[DEBUG] Successfully wrote device link to RTDB');
     
     // The Cloud Function will handle mirroring this to Firestore

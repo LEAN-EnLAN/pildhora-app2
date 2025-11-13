@@ -133,13 +133,19 @@ const initializeFirebaseServices = async () => {
   await waitForFirebaseInitialization();
   
   if (!authInstance) {
-    authInstance = getAuth(app!);
     if (Platform.OS === 'web') {
+      authInstance = getAuth(app!);
       try {
         await setPersistence(authInstance, browserLocalPersistence);
       } catch {}
+    } else {
+      const { initializeAuth, getReactNativePersistence } = await import('firebase/auth');
+      const AsyncStorageModule = await import('@react-native-async-storage/async-storage');
+      const RNAsyncStorage = (AsyncStorageModule as any).default || AsyncStorageModule;
+      authInstance = initializeAuth(app!, {
+        persistence: getReactNativePersistence(RNAsyncStorage),
+      });
     }
-    // For native RN we keep default persistence (in-memory) to avoid web bundling issues.
   }
   
   if (!dbInstance) {

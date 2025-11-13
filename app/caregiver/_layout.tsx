@@ -91,6 +91,13 @@ export default function CaregiverLayout() {
         }}
       />
       <Tabs.Screen
+        name="medications"
+        options={{
+          title: 'Medicamentos',
+          tabBarIcon: ({ color, size }) => <Ionicons name="medkit-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="audit"
         options={{
           title: 'Registro',

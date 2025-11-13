@@ -48,6 +48,7 @@ export default function PatientHome() {
   const { user } = useSelector((state: RootState) => state.auth);
   const { medications, loading } = useSelector((state: RootState) => state.medications);
   const { intakes } = useSelector((state: RootState) => state.intakes);
+  const deviceSlice = useSelector((state: RootState) => (state as any).device);
 
   const displayName = user?.name || (user?.email ? user.email.split('@')[0] : 'Paciente');
   const patientId = user?.id;
@@ -181,50 +182,41 @@ export default function PatientHome() {
     }
   };
 
-  const handleConfiguraciones = () => Alert.alert('Próximamente', 'La página de configuraciones estará disponible pronto.');
+  const handleConfiguraciones = () => router.push('/patient/settings');
   const handleMiDispositivo = () => router.push('/patient/link-device');
 
   const handleTakeUpcomingMedication = async () => {
-    if (!upcoming || !patientId) {
-      Alert.alert('Información faltante', 'No se encontró una dosis próxima o el usuario no está autenticado.');
-      return;
-    }
     try {
-      setTakingLoading(true);
-      const next = upcoming.next;
-      const hh = Math.floor(next);
-      const mm = Math.round((next - hh) * 60);
-      const scheduledDate = new Date();
-      scheduledDate.setHours(hh, mm, 0, 0);
-      const scheduledMs = scheduledDate.getTime();
-      const isDuplicate = intakes.some((intake) => {
-        if (intake.status !== IntakeStatus.TAKEN) return false;
-        const intakeMs = new Date(intake.scheduledTime).getTime();
-        const matchesTime = intakeMs === scheduledMs;
-        const matchesMed = intake.medicationId
-          ? intake.medicationId === upcoming.med.id
-          : intake.medicationName === upcoming.med.name;
-        return matchesTime && matchesMed;
-      });
-      if (isDuplicate) {
-        Alert.alert('Ya registrado', 'Esta dosis ya fue registrada para el horario programado.');
+      if (!upcoming) {
+        Alert.alert('Sin dosis', 'No hay una dosis programada próxima para hoy.');
         return;
       }
-      const db = await getDbInstance();
-      if (db) {
-        await addDoc(collection(db, 'intakeRecords'), {
-          medicationName: upcoming.med.name,
-          dosage: upcoming.med.dosage,
-          scheduledTime: scheduledDate,
-          status: IntakeStatus.TAKEN,
-          patientId,
-          takenAt: Timestamp.now(),
-          medicationId: upcoming.med.id,
-        });
+      if (!patientId) {
+        Alert.alert('Sesión requerida', 'Inicia sesión para registrar la toma.');
+        return;
       }
-      Alert.alert('Registrado', 'Se registró la toma de la medicación correctamente.');
-    } catch (e) {
-      Alert.alert('Error', 'No se pudo escribir el registro en la base de datos.');
+      setTakingLoading(true);
+      const db = await getDbInstance();
+      if (!db) {
+        throw new Error('Firestore no disponible');
+      }
+      const hh = Math.floor(upcoming.next);
+      const mm = Math.round((upcoming.next - hh) * 60);
+      const scheduledDate = new Date();
+      scheduledDate.setHours(hh, mm, 0, 0);
+      await addDoc(collection(db, 'intakeRecords'), {
+        medicationName: upcoming.med.name,
+        dosage: upcoming.med.dosage || '',
+        scheduledTime: Timestamp.fromDate(scheduledDate),
+        status: IntakeStatus.TAKEN,
+        patientId,
+        takenAt: Timestamp.now(),
+        ...(upcoming.med.id ? { medicationId: upcoming.med.id } : {}),
+        caregiverId: upcoming.med.caregiverId,
+      } as any);
+      Alert.alert('Registrado', 'Se registró la toma de la dosis.');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'No se pudo registrar la toma.');
     } finally {
       setTakingLoading(false);
     }
@@ -309,14 +301,18 @@ export default function PatientHome() {
                       <Text style={styles.upcomingMedInfo}>{upcoming.med.dosage}</Text>
                       <Text style={styles.upcomingMedInfo}>{formatHourDecimal(upcoming.next)}</Text>
                     </View>
-                    <Button
-                      variant="primary"
-                      size="md"
-                      onPress={handleTakeUpcomingMedication}
-                      disabled={takingLoading || alreadyTakenUpcoming}
-                    >
-                      {alreadyTakenUpcoming ? 'Ya registrada' : (takingLoading ? 'Cargando...' : 'Tomar medicación')}
-                    </Button>
+                    {deviceSlice?.deviceID ? (
+                      <Text style={styles.upcomingMedInfo}>Controlado por el dispositivo</Text>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        size="md"
+                        onPress={handleTakeUpcomingMedication}
+                        disabled={takingLoading}
+                      >
+                        Tomar medicación
+                      </Button>
+                    )}
                   </View>
                 ) : (
                   <Text style={styles.noUpcoming}>No hay dosis próximas para hoy.</Text>

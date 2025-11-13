@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, query, where, orderBy, doc, getDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { AppDispatch, RootState } from '../../src/store';
 import { logout } from '../../src/store/slices/authSlice';
@@ -71,11 +72,12 @@ export default function CaregiverDashboard() {
         if (!db) {
           throw new Error('Database instance not available after initialization');
         }
-        if (user) {
+        const caregiverUid = getAuth()?.currentUser?.uid || user?.id || null;
+        if (caregiverUid) {
           const patientsQ = query(
             collection(db, 'users'),
             where('role', '==', 'patient'),
-            where('caregiverId', '==', user.id),
+            where('caregiverId', '==', caregiverUid),
             orderBy('createdAt', 'desc')
           );
           setPatientsQuery(patientsQ);
@@ -100,7 +102,7 @@ export default function CaregiverDashboard() {
     }
   };
 
-  const cacheKey = user?.id ? `patients:${user.id}` : null;
+  const cacheKey = (getAuth()?.currentUser?.uid || user?.id) ? `patients:${getAuth()?.currentUser?.uid || user?.id}` : null;
   const { data: patients = [], source: patientsSource, isLoading: patientsLoading, error: patientsError } = useCollectionSWR<Patient>({
     cacheKey,
     query: isInitialized && !initializationError && cacheKey ? patientsQuery : null,

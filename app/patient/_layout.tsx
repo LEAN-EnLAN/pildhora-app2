@@ -24,6 +24,7 @@ export default function PatientLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="home" options={{ title: 'Patient Home' }} />
       <Stack.Screen name="link-device" options={{ title: 'Enlazar Dispositivo' }} />
+      <Stack.Screen name="settings" options={{ title: 'Configuraciones' }} />
     </Stack>
   );
 }

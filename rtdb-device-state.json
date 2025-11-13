@@ -1,0 +1,9 @@
+{
+  "current_status": "IDLE",
+  "time_synced": true,
+  "last_seen": 1731503605000,
+  "firmware_version": "test-1.0",
+  "timezone": "America/New_York",
+  "is_online": true,
+  "battery_level": 85
+}

@@ -1,7 +1,10 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { User, ApiResponse } from '../../types';
 import { getAuthInstance, getDbInstance } from '../../services/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { configureGoogleSignin, signInWithGoogleNative } from '../../services/auth/google';
+import { Platform } from 'react-native';
+import { signInWithPopup } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { convertTimestamps } from '../../utils/firestoreUtils';
 
@@ -80,6 +83,60 @@ export const signIn = createAsyncThunk(
       }
     } catch (error: any) {
       return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const signInWithGoogle = createAsyncThunk(
+  'auth/signInWithGoogle',
+  async (
+    payload: { role?: 'patient' | 'caregiver' },
+    { rejectWithValue }
+  ) => {
+    try {
+      const auth = await getAuthInstance();
+      const db = await getDbInstance();
+      if (!auth || !db) {
+        throw new Error('Firebase services not initialized');
+      }
+
+      configureGoogleSignin();
+
+      let firebaseUser: FirebaseUser | null = null;
+
+      if (Platform.OS === 'web') {
+        const provider = new GoogleAuthProvider();
+        const result = await signInWithPopup(auth, provider);
+        firebaseUser = result.user;
+      } else {
+        const result = await signInWithGoogleNative();
+        const { idToken } = result;
+        if (!idToken) throw new Error('Missing Google idToken');
+        const credential = GoogleAuthProvider.credential(idToken);
+        const userCred = await signInWithCredential(auth, credential);
+        firebaseUser = userCred.user;
+      }
+
+      if (!firebaseUser) throw new Error('Google sign-in failed');
+
+      const userDocRef = doc(db, 'users', firebaseUser.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        const userData = convertTimestamps(userDoc.data()) as User;
+        return userData;
+      }
+
+      const userData: User = {
+        id: firebaseUser.uid,
+        email: firebaseUser.email || '',
+        name: firebaseUser.displayName || '',
+        role: payload.role || 'patient',
+        createdAt: new Date(),
+      };
+      await setDoc(userDocRef, userData);
+      return userData;
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Failed to sign in with Google');
     }
   }
 );
@@ -204,6 +261,21 @@ const authSlice = createSlice({
         state.initializing = false;
       })
       .addCase(signIn.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        state.initializing = false;
+      })
+      .addCase(signInWithGoogle.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(signInWithGoogle.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload;
+        state.isAuthenticated = true;
+        state.initializing = false;
+      })
+      .addCase(signInWithGoogle.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
         state.initializing = false;

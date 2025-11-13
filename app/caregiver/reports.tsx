@@ -7,14 +7,19 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../src/store';
 import { useCollectionSWR } from '../../src/hooks/useCollectionSWR';
 import { getReportsQuery, uploadReportFile, addReportMetadata } from '../../src/services/firebase/reports';
+import { addAuditLog } from '../../src/services/firebase/audit';
 import { Report } from '../../src/types';
 import { useRouter } from 'expo-router';
-import { getCaregiverPatients } from '../../src/services/firebase/user';
+import { getCaregiverPatients, getMedications, updateMedication } from '../../src/services/firebase/user';
+import { callMedicationAnalysis } from '../../src/services/functions/ai';
 
 export default function ReportsScreen() {
   const router = useRouter();
   const { user } = useSelector((state: RootState) => state.auth);
   const [selectedTargetId, setSelectedTargetId] = useState('dummy-patient');
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<any>(null);
 
   const [reportsQuery, setReportsQuery] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
@@ -39,6 +44,9 @@ export default function ReportsScreen() {
         const first = patients[0];
         if (first.deviceId) {
           setSelectedTargetId(first.deviceId);
+        }
+        if (first.id) {
+          setSelectedPatientId(first.id);
         }
       }
     };
@@ -107,6 +115,37 @@ export default function ReportsScreen() {
     return 'document-outline';
   };
 
+  const handleAnalyzeMedications = async () => {
+    if (!selectedPatientId || !user) return;
+    try {
+      setAiLoading(true);
+      const result = await callMedicationAnalysis(selectedPatientId);
+      setAiResult(result);
+    } catch (e) {
+      Alert.alert('Error', 'No se pudo analizar los medicamentos.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const applyTimingSuggestions = async () => {
+    if (!selectedPatientId || !aiResult?.optimalTiming) return;
+    try {
+      const meds = await getMedications(selectedPatientId);
+      const timingMap: Record<string, any> = aiResult.optimalTiming;
+      for (const m of meds) {
+        const suggestion = timingMap[m.id];
+        if (suggestion) {
+          await updateMedication(m.id, { schedule: suggestion.schedule });
+        }
+      }
+      await addAuditLog({ action: 'medication_update_ai', userId: user.id, caregiverId: user.id });
+      Alert.alert('Éxito', 'Se aplicaron las recomendaciones de horario.');
+    } catch (e) {
+      Alert.alert('Error', 'No se pudieron aplicar las recomendaciones.');
+    }
+  };
+
   return (
     <SafeAreaView edges={['bottom']} style={styles.container}>
       <View style={styles.header}>
@@ -114,6 +153,29 @@ export default function ReportsScreen() {
         <TouchableOpacity onPress={handleUploadReport} style={styles.uploadButton} disabled={uploading}>
           {uploading ? <ActivityIndicator color="white" /> : <Ionicons name="cloud-upload-outline" size={24} color="white" />}
         </TouchableOpacity>
+      </View>
+      <View style={styles.aiCard}>
+        <View style={styles.aiHeader}>
+          <Text style={styles.aiTitle}>Asistente de Medicación (AI)</Text>
+          <TouchableOpacity onPress={handleAnalyzeMedications} style={styles.analyzeButton} disabled={aiLoading || !selectedPatientId}>
+            {aiLoading ? <ActivityIndicator color="white" /> : <Ionicons name="sparkles-outline" size={20} color="white" />}
+          </TouchableOpacity>
+        </View>
+        {aiResult && (
+          <View>
+            <Text style={styles.sectionTitle}>Interacciones</Text>
+            <Text style={styles.sectionText}>{JSON.stringify(aiResult.interactions || {})}</Text>
+            <Text style={styles.sectionTitle}>Conflictos</Text>
+            <Text style={styles.sectionText}>{JSON.stringify(aiResult.conflicts || {})}</Text>
+            <Text style={styles.sectionTitle}>Horario óptimo</Text>
+            <Text style={styles.sectionText}>{JSON.stringify(aiResult.optimalTiming || {})}</Text>
+            <Text style={styles.sectionTitle}>Ajustes de dosis</Text>
+            <Text style={styles.sectionText}>{JSON.stringify(aiResult.dosageAdjustments || {})}</Text>
+            <TouchableOpacity onPress={applyTimingSuggestions} style={styles.applyButton}>
+              <Text style={{ color: 'white' }}>Aplicar horarios sugeridos</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
       <FlatList
         data={reports.length ? reports : dummyReports}
@@ -174,6 +236,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  aiCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 8,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 8,
+  },
+  aiHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  aiTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  analyzeButton: {
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  sectionTitle: {
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  sectionText: {
+    color: '#374151',
+    fontSize: 12,
+  },
+  applyButton: {
+    backgroundColor: '#10B981',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 12,
   },
   reportInfo: {
     flexDirection: 'row',

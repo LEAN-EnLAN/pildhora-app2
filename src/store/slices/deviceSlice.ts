@@ -14,6 +14,8 @@ interface DeviceSliceState {
   state?: DeviceState;
   listening: boolean;
   error?: string | null;
+  lastAck?: any;
+  events?: any[];
 }
 
 const initialState: DeviceSliceState = {
@@ -23,6 +25,8 @@ const initialState: DeviceSliceState = {
 
 // Mantener el listener fuera del estado Redux para evitar datos no serializables
 let unsubscribe: (() => void) | null = null;
+let unsubscribeAck: (() => void) | null = null;
+let unsubscribeEvents: (() => void) | null = null;
 
 export const startDeviceListener = createAsyncThunk(
   'device/startListener',
@@ -32,6 +36,14 @@ export const startDeviceListener = createAsyncThunk(
       unsubscribe();
       unsubscribe = null;
     }
+    if (unsubscribeAck) {
+      unsubscribeAck();
+      unsubscribeAck = null;
+    }
+    if (unsubscribeEvents) {
+      unsubscribeEvents();
+      unsubscribeEvents = null;
+    }
 
     const rdb = await getRdbInstance();
     const r = ref(rdb, `devices/${deviceID}/state`);
@@ -40,6 +52,20 @@ export const startDeviceListener = createAsyncThunk(
       if (val) {
         dispatch(setDeviceState(val));
       }
+    });
+
+    const ackRef = ref(rdb, `devices/${deviceID}/lastAck`);
+    unsubscribeAck = onValue(ackRef, (snap) => {
+      const val = snap.val();
+      dispatch(setLastAck(val));
+    });
+
+    const eventsRef = ref(rdb, `devices/${deviceID}/dispenseEvents`);
+    unsubscribeEvents = onValue(eventsRef, (snap) => {
+      const val = snap.val() || {};
+      const arr = Object.keys(val).map((k) => ({ id: k, ...val[k] }));
+      arr.sort((a: any, b: any) => (b?.dispensedAt || b?.requestedAt || 0) - (a?.dispensedAt || a?.requestedAt || 0));
+      dispatch(setEvents(arr));
     });
 
     dispatch(setDeviceID(deviceID));
@@ -52,6 +78,14 @@ export const stopDeviceListener = createAsyncThunk('device/stopListener', async 
   if (unsubscribe) {
     unsubscribe();
     unsubscribe = null;
+  }
+  if (unsubscribeAck) {
+    unsubscribeAck();
+    unsubscribeAck = null;
+  }
+  if (unsubscribeEvents) {
+    unsubscribeEvents();
+    unsubscribeEvents = null;
   }
   dispatch(setListening(false));
   return true;
@@ -89,8 +123,14 @@ const deviceSlice = createSlice({
     setDeviceError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
+    setLastAck: (state, action: PayloadAction<any>) => {
+      state.lastAck = action.payload;
+    },
+    setEvents: (state, action: PayloadAction<any[]>) => {
+      state.events = action.payload;
+    },
   },
 });
 
-export const { setDeviceID, setDeviceState, setListening, setDeviceError } = deviceSlice.actions;
+export const { setDeviceID, setDeviceState, setListening, setDeviceError, setLastAck, setEvents } = deviceSlice.actions;
 export default deviceSlice.reducer;

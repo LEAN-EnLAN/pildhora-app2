@@ -10,11 +10,12 @@ import intakesReducer from './slices/intakesSlice';
 import tasksReducer from './slices/tasksSlice';
 import bleReducer from './slices/bleSlice';
 import deviceReducer from './slices/deviceSlice';
+import preferencesReducer from './slices/preferencesSlice';
 
 const persistConfig = {
   key: 'root',
   storage: AsyncStorage,
-  whitelist: ['medications', 'tasks'], // Persist these slices, not BLE/device real-time state
+  whitelist: ['medications', 'tasks', 'preferences'], // Persist these slices, not BLE/device real-time state
   // Auth state will be rehydrated but validated against Firebase on app start
   blacklist: ['auth'], // Don't persist auth state to avoid stale authentication
 };
@@ -26,6 +27,7 @@ const rootReducer = combineReducers({
   tasks: tasksReducer,
   ble: bleReducer,
   device: deviceReducer,
+  preferences: preferencesReducer,
 });
 
 // Create a root reducer that can reset state when needed

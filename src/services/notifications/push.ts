@@ -46,8 +46,10 @@ export async function ensurePushTokensRegistered(userId: string): Promise<void> 
     try {
       const expoToken = await Notifications.getExpoPushTokenAsync();
       if (expoToken?.data) {
+        const sanitizeKey = (s: string) => s.replace(/[.#$\[\]]/g, '_');
+        const safe = sanitizeKey(expoToken.data);
         const rdb = await getRdbInstance();
-        await set(ref(rdb, `users/${userId}/expoPushTokens/${expoToken.data}`), true);
+        await set(ref(rdb, `users/${userId}/expoPushTokens/${safe}`), true);
       }
     } catch (e) {
       // Ignore if Expo push not configured

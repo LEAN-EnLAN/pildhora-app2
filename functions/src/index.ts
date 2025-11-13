@@ -14,6 +14,7 @@ import { onDocumentUpdated, onDocumentCreated } from "firebase-functions/v2/fire
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 import { CloudTasksClient } from "@google-cloud/tasks";
+export { medicationAnalysis, patientMedicationQA } from "./ai";
 
 // Start writing functions
 // https://firebase.google.com/docs/functions/typescript
@@ -493,4 +494,48 @@ export const getPatientAdherence = onCall(async (request) => {
   }
 
   return { adherence, doseSegments };
+});
+
+export const onDispenseEventToIntake = onValueCreated({ ref: "/devices/{deviceID}/dispenseEvents/{eventID}" }, async (event) => {
+  const deviceID = event.params.deviceID as string;
+  const eventID = event.params.eventID as string;
+  const data = event.data.val() || {};
+
+  try {
+    const userID = await resolveOwnerUserId(deviceID);
+    const medId = data.medId as string | undefined;
+    let medicationName = data.medicationName || "";
+    let dosage = data.dosage || "";
+    if ((!medicationName || !dosage) && medId) {
+      const medDoc = await admin.firestore().doc(`medications/${medId}`).get();
+      if (medDoc.exists) {
+        const m = medDoc.data() || {};
+        medicationName = m.name || medicationName || "";
+        dosage = m.dosage || dosage || "";
+      }
+    }
+
+    const scheduledMs = typeof data.scheduledTime === "number" ? data.scheduledTime : data.requestedAt || Date.now();
+    const dispensedMs = typeof data.dispensedAt === "number" ? data.dispensedAt : Date.now();
+    const ok = data.ok !== false;
+
+    const docId = `${deviceID}_${eventID}`;
+    await admin.firestore().doc(`intakeRecords/${docId}`).set({
+      deviceId: deviceID,
+      patientId: userID || "",
+      medicationId: medId || null,
+      medicationName,
+      dosage,
+      scheduledTime: new Date(scheduledMs),
+      status: ok ? "TAKEN" : "MISSED",
+      takenAt: new Date(dispensedMs),
+      createdBy: "device",
+      requestedBy: data.requestedBy || "",
+      requestedAt: new Date(data.requestedAt || dispensedMs),
+    }, { merge: false });
+
+    logger.info("Created intake record from dispense event", { deviceID, eventID });
+  } catch (e: any) {
+    logger.error("onDispenseEventToIntake error", { error: e.message, deviceID, eventID });
+  }
 });

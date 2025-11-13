@@ -10,9 +10,16 @@ export default function MedicationsLayout() {
         name="index"
         options={{
           title: 'Mis Medicamentos',
+          headerLeft: () => (
+            <Link href="/patient/home" asChild>
+              <Pressable style={{ height: 44, width: 44, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="chevron-back" size={24} color="#3B82F6" />
+              </Pressable>
+            </Link>
+          ),
           headerRight: () => (
             <Link href="/patient/medications/add" asChild>
-              <Pressable>
+              <Pressable style={{ height: 44, width: 44, alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons name="add" size={24} color="#3B82F6" />
               </Pressable>
             </Link>

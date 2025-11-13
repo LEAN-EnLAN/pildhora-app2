@@ -3,7 +3,7 @@ import { Text, View, Alert, KeyboardAvoidingView, Platform, StyleSheet, ScrollVi
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { signUp } from '../../src/store/slices/authSlice';
+import { signUp, signInWithGoogle } from '../../src/store/slices/authSlice';
 import { RootState, AppDispatch } from '../../src/store';
 import { Button, Card, Container } from '../../src/components/ui';
 import { PHTextField } from '../../src/components/ui/PHTextField';
@@ -78,6 +78,28 @@ export default function SignupScreen() {
 
   const navigateToLogin = () => {
     router.replace('/auth/login');
+  };
+
+  const handleGoogleSignup = async () => {
+    if (loading) return;
+    try {
+      const result = await dispatch(signInWithGoogle({ role })).unwrap();
+      Alert.alert('Éxito', '¡Cuenta creada exitosamente con Google!', [
+        {
+          text: 'Aceptar',
+          onPress: () => {
+            if (result.role === 'patient') {
+              router.replace('/patient/home');
+            } else {
+              router.replace('/caregiver/dashboard');
+            }
+          },
+        },
+      ]);
+    } catch (error: any) {
+      const message = typeof error === 'string' ? error : (error?.message || 'Error desconocido');
+      Alert.alert('Error de Google', message);
+    }
   };
 
   return (
@@ -170,6 +192,16 @@ export default function SignupScreen() {
             style={styles.signupButton}
           >
             {loading ? 'Creando cuenta...' : 'Registrarse'}
+          </Button>
+
+          <Button
+            onPress={handleGoogleSignup}
+            disabled={loading}
+            variant="secondary"
+            size="lg"
+            style={[styles.signupButton, styles.googleButton]}
+          >
+            Registrarse con Google
           </Button>
 
           <View style={styles.loginContainer}>
@@ -297,6 +329,9 @@ const styles = StyleSheet.create({
   },
   signupButton: {
     width: '100%',
+  },
+  googleButton: {
+    marginTop: 8,
   },
   loginContainer: {
     flexDirection: 'row',

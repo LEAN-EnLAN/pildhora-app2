@@ -8,7 +8,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../src/store';
 import { linkDeviceToUser, unlinkDeviceFromUser, checkDevelopmentRuleStatus } from '../../src/services/deviceLinking';
 import { getDbInstance, getRdbInstance, getAuthInstance } from '../../src/services/firebase';
-import { ref, get } from 'firebase/database';
+import { ref, get, push, set } from 'firebase/database';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import { Button } from '../../src/components/ui';
@@ -204,10 +204,24 @@ export default function LinkDeviceScreen() {
   const handleDispense = async (id: string) => {
     try {
       const rdb = await getRdbInstance();
+      const auth = await getAuthInstance();
       if (!rdb) {
         throw new Error('Realtime Database not available');
       }
-      await set(ref(rdb, `devices/${id}/dispense`), true);
+      const stateSnap = await get(ref(rdb, `devices/${id}/state`));
+      const current = stateSnap.val() || {};
+      const isIdle = current?.current_status === 'idle' || current?.current_status === 'IDLE';
+      const timeSynced = current?.time_synced === true;
+      if (!isIdle || !timeSynced) {
+        throw new Error('No se puede dispensar: el dispositivo no está listo');
+      }
+      const reqRef = push(ref(rdb, `devices/${id}/dispenseRequests`));
+      const payload = {
+        triggerId: `${auth?.currentUser?.uid || 'app'}_${Date.now()}`,
+        requestedBy: auth?.currentUser?.uid || 'app',
+        requestedAt: Date.now(),
+      };
+      await set(reqRef, payload);
     } catch (e: any) {
       setError(e.message || 'No se pudo dispensar');
     }
@@ -327,6 +341,9 @@ export default function LinkDeviceScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Enlazar Dispositivo</Text>
         <Text style={styles.infoText}>Agrega tu Pillbox para habilitar estado en tiempo real y notificaciones.</Text>
+        <View style={{ marginTop: 8 }}>
+          <Button onPress={() => router.push('/device/provision')} variant="secondary" size="md">Provisionar nuevo dispositivo</Button>
+        </View>
       </View>
 
       <View style={styles.card}>

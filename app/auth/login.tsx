@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Text, View, Alert, Image, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { Text, View, Alert, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { signIn, logout } from '../../src/store/slices/authSlice';
+import { signIn, logout, signInWithGoogle } from '../../src/store/slices/authSlice';
 import { RootState, AppDispatch } from '../../src/store';
 import { getAuthInstance } from '../../src/services/firebase';
 import { Button, Card, Container } from '../../src/components/ui';
@@ -54,6 +54,21 @@ export default function LoginScreen() {
       if (message.includes('auth/user-not-found')) friendly = 'No existe una cuenta con ese correo.';
       if (message.includes('auth/too-many-requests')) friendly = 'Demasiados intentos. Espera un momento y vuelve a intentar.';
       Alert.alert('Error de inicio de sesión', friendly);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    if (loading) return;
+    try {
+      const result = await dispatch(signInWithGoogle({})).unwrap();
+      if (result.role === 'patient') {
+        router.replace('/patient/home');
+      } else {
+        router.replace('/caregiver/dashboard');
+      }
+    } catch (error: any) {
+      const message = typeof error === 'string' ? error : (error?.message || 'Error desconocido');
+      Alert.alert('Error de Google', message);
     }
   };
 
@@ -126,6 +141,16 @@ export default function LoginScreen() {
             style={styles.loginButton}
           >
             {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+          </Button>
+
+          <Button
+            onPress={handleGoogleLogin}
+            disabled={loading}
+            variant="secondary"
+            size="lg"
+            style={[styles.loginButton, styles.googleButton]}
+          >
+            Iniciar sesión con Google
           </Button>
 
           <View style={styles.signupContainer}>
@@ -234,6 +259,9 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     width: '100%',
+  },
+  googleButton: {
+    marginTop: 8,
   },
   signupContainer: {
     flexDirection: 'row',

@@ -7,8 +7,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "pildhora",
-    "plugins": [
-      "expo-router"
+  "plugins": [
+      "expo-router",
+      "@react-native-google-signin/google-signin"
     ],
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -17,10 +18,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pildhora.app",
+      "bundleIdentifier": "pildhora.com",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "package": "com.pildhora.app",
