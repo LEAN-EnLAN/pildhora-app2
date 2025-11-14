@@ -164,3 +164,27 @@ export interface PatientWithDevice extends Patient {
   deviceState?: DeviceState;
   doseSegments?: DoseSegment[];
 }
+
+// Device configuration types
+export interface DeviceConfig {
+  deviceId: string;
+  alarmMode: 'off' | 'sound' | 'led' | 'both';
+  ledIntensity: number; // 0-1023
+  ledColor: {
+    r: number; // 0-255
+    g: number; // 0-255
+    b: number; // 0-255
+  };
+  lastUpdated: Date | string;
+  syncStatus?: 'synced' | 'pending' | 'error';
+}
+
+// Notification preferences types
+export interface NotificationPreferences {
+  userId: string;
+  enabled: boolean;
+  permissionStatus: 'granted' | 'denied' | 'undetermined';
+  hierarchy: string[]; // ordered list of modalities
+  customModalities: string[];
+  lastUpdated: Date | string;
+}

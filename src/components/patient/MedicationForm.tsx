@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, Alert, StyleSheet, View } from 'react-native';
+import { ScrollView, Alert, StyleSheet, View, Text } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../store';
 import { addMedication, updateMedication, deleteMedication } from '../../store/slices/medicationsSlice';
@@ -10,7 +10,8 @@ import DoseInputContainer from './medication-form/DoseInputContainer';
 import QuantityTypeSelector from './medication-form/QuantityTypeSelector';
 import ReminderTimePicker from './medication-form/ReminderTimePicker';
 import ReminderDaysSelector from './medication-form/ReminderDaysSelector';
-import { Button, Card, Container } from '../ui';
+import { Button, Card, Container, Modal } from '../ui';
+import { colors, spacing, typography } from '../../theme/tokens';
 
 type Mode = 'add' | 'edit';
 
@@ -55,6 +56,8 @@ export default function MedicationForm({ mode, medication, onDelete, patientIdOv
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Migration function for backward compatibility
   const migrateMedicationData = (medication: any): FormState => {
@@ -160,53 +163,68 @@ export default function MedicationForm({ mode, medication, onDelete, patientIdOv
       return;
     }
 
-    // Get caregiverId from user if available
-    const caregiverId = user?.role === 'caregiver' ? user.id : '';
+    setIsSubmitting(true);
 
-    // Prepare medication data with new format
-    const medicationData = {
-      name: form.name.trim(),
-      doseValue: form.doseValue,
-      doseUnit: form.doseUnit,
-      quantityType: form.quantityTypes[0], // For now, use first selected type
-      isCustomQuantityType: !QUANTITY_TYPES.some(t => t.label === form.quantityTypes[0]),
-      frequency: form.reminderDays.join(', '),
-      times: form.reminderTimes,
-      patientId,
-      caregiverId,
-      // Keep legacy dosage field for backward compatibility
-      dosage: `${form.doseValue}${form.doseUnit}, ${form.quantityTypes[0]}`,
-    };
+    try {
+      // Get caregiverId from user if available
+      const caregiverId = user?.role === 'caregiver' ? user.id : '';
 
-    if (mode === 'add') {
-      const newMed: Omit<Medication, 'id' | 'createdAt' | 'updatedAt'> = medicationData;
-      await dispatch(addMedication(newMed));
-    } else if (mode === 'edit' && medication?.id) {
-      const updates: Partial<Medication> = medicationData;
-      await dispatch(updateMedication({ id: medication.id, updates }));
+      // Prepare medication data with new format
+      const medicationData = {
+        name: form.name.trim(),
+        doseValue: form.doseValue,
+        doseUnit: form.doseUnit,
+        quantityType: form.quantityTypes[0], // For now, use first selected type
+        isCustomQuantityType: !QUANTITY_TYPES.some(t => t.label === form.quantityTypes[0]),
+        frequency: form.reminderDays.join(', '),
+        times: form.reminderTimes,
+        patientId,
+        caregiverId,
+        // Keep legacy dosage field for backward compatibility
+        dosage: `${form.doseValue}${form.doseUnit}, ${form.quantityTypes[0]}`,
+      };
+
+      if (mode === 'add') {
+        const newMed: Omit<Medication, 'id' | 'createdAt' | 'updatedAt'> = medicationData;
+        await dispatch(addMedication(newMed));
+      } else if (mode === 'edit' && medication?.id) {
+        const updates: Partial<Medication> = medicationData;
+        await dispatch(updateMedication({ id: medication.id, updates }));
+      }
+
+      router.back();
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo guardar el medicamento');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    router.back();
   };
 
-  const handleDelete = async () => {
+  const handleDeletePress = () => {
     if (mode !== 'edit' || !medication?.id) return;
-    Alert.alert(
-      'Eliminar Medicamento',
-      '¿Estás seguro de que quieres eliminar este medicamento?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            await dispatch(deleteMedication(medication.id));
-            if (onDelete) onDelete();
-            router.back();
-          },
-        },
-      ]
-    );
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!medication?.id) return;
+    
+    setShowDeleteModal(false);
+    
+    try {
+      await dispatch(deleteMedication(medication.id));
+      if (onDelete) onDelete();
+      router.back();
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo eliminar el medicamento');
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteModal(false);
+  };
+
+  const handleCancel = () => {
+    router.back();
   };
 
   return (
@@ -254,40 +272,93 @@ export default function MedicationForm({ mode, medication, onDelete, patientIdOv
           {/* Actions */}
           <View style={styles.actionsRow}>
             <Button
+              onPress={handleCancel}
+              variant="secondary"
+              size="lg"
+              style={styles.actionButton}
+              accessibilityLabel="Cancelar"
+              accessibilityHint="Cancela la edición y regresa a la pantalla anterior"
+            >
+              Cancelar
+            </Button>
+            <Button
               onPress={submitForm}
               variant="primary"
               size="lg"
+              loading={isSubmitting}
               style={styles.actionButton}
+              accessibilityLabel={mode === 'add' ? 'Guardar medicamento' : 'Actualizar medicamento'}
+              accessibilityHint={mode === 'add' ? 'Guarda el nuevo medicamento' : 'Guarda los cambios del medicamento'}
             >
               {mode === 'add' ? 'Guardar' : 'Actualizar'}
             </Button>
-            {mode === 'edit' && medication?.id && (
-              <Button
-                onPress={handleDelete}
-                variant="danger"
-                size="lg"
-                style={styles.actionButton}
-              >
-                Eliminar
-              </Button>
-            )}
           </View>
         </Card>
       </ScrollView>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        onClose={handleDeleteCancel}
+        title="Eliminar Medicamento"
+        size="sm"
+        animationType="slide"
+      >
+        <View style={styles.modalContent}>
+          <Text style={styles.modalMessage}>
+            ¿Estás seguro de que quieres eliminar este medicamento? Esta acción no se puede deshacer.
+          </Text>
+          <View style={styles.modalActions}>
+            <Button
+              onPress={handleDeleteCancel}
+              variant="secondary"
+              size="md"
+              style={styles.modalButton}
+              accessibilityLabel="Cancelar eliminación"
+              accessibilityHint="Cierra el diálogo sin eliminar el medicamento"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onPress={handleDeleteConfirm}
+              variant="danger"
+              size="md"
+              style={styles.modalButton}
+              accessibilityLabel="Confirmar eliminación"
+              accessibilityHint="Elimina permanentemente el medicamento"
+            >
+              Eliminar
+            </Button>
+          </View>
+        </View>
+      </Modal>
     </Container>
   );
 }
 
 const styles = StyleSheet.create({
-  submitButton: {
-    marginTop: 12,
-  },
   actionsRow: {
-    marginTop: 12,
+    marginTop: spacing.lg,
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.md,
   },
   actionButton: {
+    flex: 1,
+  },
+  modalContent: {
+    paddingVertical: spacing.sm,
+  },
+  modalMessage: {
+    fontSize: typography.fontSize.base,
+    color: colors.gray[700],
+    lineHeight: typography.fontSize.base * 1.5,
+    marginBottom: spacing.xl,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  modalButton: {
     flex: 1,
   },
 });

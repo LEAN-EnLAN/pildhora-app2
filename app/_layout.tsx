@@ -43,10 +43,31 @@ export default function RootLayout() {
         {/* Bootstrap notifications token registration */}
         <NotificationsBootstrapper />
         <SafeAreaProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="auth/login" />
-            <Stack.Screen name="auth/signup" />
+          <Stack 
+            screenOptions={{ 
+              headerShown: false,
+              animation: 'slide_from_right',
+              animationDuration: 250,
+            }}
+          >
+            <Stack.Screen 
+              name="index" 
+              options={{
+                animation: 'fade',
+              }}
+            />
+            <Stack.Screen 
+              name="auth/login"
+              options={{
+                animation: 'slide_from_bottom',
+              }}
+            />
+            <Stack.Screen 
+              name="auth/signup"
+              options={{
+                animation: 'slide_from_bottom',
+              }}
+            />
           </Stack>
         </SafeAreaProvider>
       </PersistGate>

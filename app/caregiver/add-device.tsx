@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Text, View, TextInput, ActivityIndicator, Alert, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { Text, View, StyleSheet, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -8,26 +8,92 @@ import { AppDispatch, RootState } from '../../src/store';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { linkDeviceToUser } from '../../src/services/deviceLinking';
-import { getDbInstance, getRdbInstance } from '../../src/services/firebase';
-import { ref, get as rdbGet } from 'firebase/database';
+import { getDbInstance } from '../../src/services/firebase';
 import { startDeviceListener } from '../../src/store/slices/deviceSlice';
+import { Button, Input, Card, LoadingSpinner, ErrorMessage, SuccessMessage } from '../../src/components/ui';
+import { colors, spacing, typography } from '../../src/theme/tokens';
 
 type Step = 'enterId' | 'linking' | 'success' | 'error';
 
 export default function AddPatientScreen() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
-  const { user } = useSelector((state: RootState) => state.auth);
   
   const [step, setStep] = useState<Step>('enterId');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [foundPatientName, setFoundPatientName] = useState<string>('');
   const [deviceId, setDeviceId] = useState('');
+  const [validationError, setValidationError] = useState<string>('');
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  // Validate device ID
+  const validateDeviceId = (id: string): boolean => {
+    if (!id.trim()) {
+      setValidationError('El Device ID es requerido');
+      return false;
+    }
+    if (id.trim().length < 5) {
+      setValidationError('El Device ID debe tener al menos 5 caracteres');
+      return false;
+    }
+    setValidationError('');
+    return true;
+  };
+
+  const handleDeviceIdChange = (text: string) => {
+    setDeviceId(text);
+    if (text.trim()) {
+      validateDeviceId(text);
+    } else {
+      setValidationError('');
+    }
+  };
+
+  const animateTransition = (callback: () => void) => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: -20,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      callback();
+      slideAnim.setValue(20);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  };
 
   const handleLink = async () => {
-    setStep('linking');
+    // Validate before proceeding
+    if (!validateDeviceId(deviceId)) {
+      return;
+    }
+
+    animateTransition(() => setStep('linking'));
+    
     try {
       const db = await getDbInstance();
+      if (!db) {
+        throw new Error('No se pudo conectar a la base de datos');
+      }
       const deviceRef = doc(db, 'devices', deviceId.trim());
       const snap = await getDoc(deviceRef);
       if (!snap.exists()) {
@@ -46,67 +112,149 @@ export default function AddPatientScreen() {
       }
 
       dispatch(startDeviceListener(deviceId.trim()));
-      setFoundPatientName('');
-      setStep('success');
+      animateTransition(() => setStep('success'));
     } catch (error: any) {
       console.error("Error finding patient by device:", error);
       setErrorMessage(error.message || 'Ocurrió un error al verificar el dispositivo.');
-      setStep('error');
+      animateTransition(() => setStep('error'));
     }
   };
 
+  const handleRetry = () => {
+    setErrorMessage(null);
+    animateTransition(() => setStep('enterId'));
+  };
+
   const renderContent = () => {
+    const animatedStyle = {
+      opacity: fadeAnim,
+      transform: [{ translateY: slideAnim }],
+    };
+
     switch (step) {
       case 'enterId':
         return (
-          <View style={styles.center}>
-            <Text style={styles.title}>Vincular ESP8266 por Wi‑Fi</Text>
-            <Text style={styles.subtitle}>Ingresa el ID del dispositivo (por ejemplo, el MAC o identificador asignado).</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ejemplo: esp8266-ABC123"
-              value={deviceId}
-              onChangeText={setDeviceId}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity onPress={handleLink} style={styles.button} disabled={!deviceId.trim()}>
-              <Text style={styles.buttonText}>Vincular</Text>
-            </TouchableOpacity>
-          </View>
+          <Animated.View style={[styles.contentContainer, animatedStyle]}>
+            <Card variant="elevated" padding="lg" style={styles.card}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="hardware-chip-outline" size={48} color={colors.primary[500]} />
+              </View>
+              
+              <Text style={styles.title}>Vincular ESP8266</Text>
+              <Text style={styles.subtitle}>
+                Ingresa el ID del dispositivo para conectarlo a tu cuenta
+              </Text>
+
+              <View style={styles.inputContainer}>
+                <Input
+                  label="Device ID"
+                  placeholder="Ejemplo: esp8266-ABC123"
+                  value={deviceId}
+                  onChangeText={handleDeviceIdChange}
+                  error={validationError}
+                  helperText="Identificador único del dispositivo (mínimo 5 caracteres)"
+                  autoCapitalize="none"
+                  leftIcon={<Ionicons name="qr-code-outline" size={20} color={colors.gray[400]} />}
+                  required
+                />
+              </View>
+
+              <Button
+                onPress={handleLink}
+                variant="primary"
+                size="lg"
+                fullWidth
+                disabled={!deviceId.trim() || !!validationError}
+                accessibilityLabel="Vincular dispositivo"
+              >
+                Vincular Dispositivo
+              </Button>
+            </Card>
+          </Animated.View>
         );
+
       case 'linking':
         return (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color="#3b82f6" />
-            <Text style={styles.statusText}>Vinculando dispositivo...</Text>
-          </View>
+          <Animated.View style={[styles.contentContainer, animatedStyle]}>
+            <Card variant="elevated" padding="lg" style={styles.card}>
+              <LoadingSpinner 
+                size="lg" 
+                text="Vinculando dispositivo..."
+              />
+              <Text style={styles.loadingSubtext}>
+                Esto puede tomar unos segundos
+              </Text>
+            </Card>
+          </Animated.View>
         );
+
       case 'success':
         return (
-          <View style={styles.center}>
-            <Ionicons name="checkmark-circle" size={80} color="green" />
-            <Text style={styles.title}>Dispositivo Vinculado</Text>
-            <Text style={styles.subtitle}>
-              El dispositivo ha sido vinculado y se iniciará la lectura de estado.
-            </Text>
-            <TouchableOpacity onPress={() => router.back()} style={styles.button}>
-              <Text style={styles.buttonText}>Hecho</Text>
-            </TouchableOpacity>
-          </View>
+          <Animated.View style={[styles.contentContainer, animatedStyle]}>
+            <Card variant="elevated" padding="lg" style={styles.card}>
+              <SuccessMessage
+                message="¡Dispositivo vinculado exitosamente!"
+                autoDismiss={false}
+              />
+              
+              <Text style={styles.successDetails}>
+                El dispositivo ha sido conectado y se iniciará la lectura de estado en tiempo real.
+              </Text>
+
+              <View style={styles.buttonGroup}>
+                <Button
+                  onPress={() => router.back()}
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  leftIcon={<Ionicons name="checkmark" size={20} color="#FFFFFF" />}
+                >
+                  Hecho
+                </Button>
+              </View>
+            </Card>
+          </Animated.View>
         );
+
       case 'error':
         return (
-          <View style={styles.center}>
-            <Ionicons name="close-circle" size={80} color="red" />
-            <Text style={styles.title}>Error</Text>
-            <Text style={styles.subtitle}>
-              {errorMessage || 'No se pudo vincular el dispositivo.'}
-            </Text>
-            <TouchableOpacity onPress={() => router.back()} style={styles.button}>
-              <Text style={styles.buttonText}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
+          <Animated.View style={[styles.contentContainer, animatedStyle]}>
+            <Card variant="elevated" padding="lg" style={styles.card}>
+              <ErrorMessage
+                message={errorMessage || 'No se pudo vincular el dispositivo'}
+                onRetry={handleRetry}
+                variant="inline"
+              />
+
+              <Text style={styles.errorHelp}>
+                Verifica que el Device ID sea correcto y que tengas conexión a internet.
+              </Text>
+
+              <View style={styles.buttonGroup}>
+                <Button
+                  onPress={handleRetry}
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  leftIcon={<Ionicons name="refresh" size={20} color="#FFFFFF" />}
+                  style={styles.retryButton}
+                >
+                  Reintentar
+                </Button>
+                
+                <Button
+                  onPress={() => router.back()}
+                  variant="outline"
+                  size="lg"
+                  fullWidth
+                >
+                  Cancelar
+                </Button>
+              </View>
+            </Card>
+          </Animated.View>
         );
+
       default:
         return null;
     }
@@ -123,52 +271,66 @@ export default function AddPatientScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.background,
   },
-  center: {
+  contentContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    padding: spacing.lg,
   },
-  statusText: {
-    marginTop: 16,
-    fontSize: 18,
-    color: '#4B5563',
-  },
-  title: {
-    marginTop: 16,
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  subtitle: {
-    color: '#4B5563',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  input: {
+  card: {
     width: '100%',
     maxWidth: 480,
-    backgroundColor: '#FFFFFF',
-    borderColor: '#D1D5DB',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginTop: 16,
   },
-  button: {
-    backgroundColor: '#3B82F6',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 24,
-    width: '100%',
+  iconContainer: {
     alignItems: 'center',
+    marginBottom: spacing.lg,
   },
-  buttonText: {
-    color: '#FFFFFF',
+  title: {
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[900],
     textAlign: 'center',
-    fontWeight: 'bold',
+    marginBottom: spacing.sm,
+  },
+  subtitle: {
+    fontSize: typography.fontSize.base,
+    color: colors.gray[600],
+    textAlign: 'center',
+    marginBottom: spacing['2xl'],
+    lineHeight: typography.fontSize.base * typography.lineHeight.normal,
+  },
+  inputContainer: {
+    marginBottom: spacing['2xl'],
+  },
+  loadingSubtext: {
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[500],
+    textAlign: 'center',
+    marginTop: spacing.lg,
+  },
+  successDetails: {
+    fontSize: typography.fontSize.base,
+    color: colors.gray[600],
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    marginBottom: spacing['2xl'],
+    lineHeight: typography.fontSize.base * typography.lineHeight.normal,
+  },
+  errorHelp: {
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[600],
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    marginBottom: spacing['2xl'],
+    lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
+  },
+  buttonGroup: {
+    width: '100%',
+    gap: spacing.md,
+  },
+  retryButton: {
+    marginBottom: spacing.sm,
   },
 });

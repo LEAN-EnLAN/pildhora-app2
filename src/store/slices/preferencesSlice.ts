@@ -136,6 +136,8 @@ export const {
   setNotificationPermissionStatus,
   setLocationPermissionStatus,
   setBluetoothStatus,
+  addModality,
+  removeModality,
 } = preferencesSlice.actions
 
 export default preferencesSlice.reducer

@@ -1,9 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PHTextField } from '../../src/components/ui/PHTextField';
-import Slider from '@react-native-community/slider';
-import ColorPickerScaffold from '../../src/components/ColorPickerScaffold';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../src/store';
 import { linkDeviceToUser, unlinkDeviceFromUser, checkDevelopmentRuleStatus } from '../../src/services/deviceLinking';
@@ -11,36 +8,122 @@ import { getDbInstance, getRdbInstance, getAuthInstance } from '../../src/servic
 import { ref, get, push, set } from 'firebase/database';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
-import { Button } from '../../src/components/ui';
+import { Button, Input, Card, LoadingSpinner, ErrorMessage, SuccessMessage, AnimatedListItem, Collapsible } from '../../src/components/ui';
+import { DeviceConfigPanel } from '../../src/components/shared/DeviceConfigPanel';
+import { colors, spacing, typography } from '../../src/theme/tokens';
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  header: { padding: 20, backgroundColor: 'white', marginBottom: 16 },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#1C1C1E' },
-  card: { backgroundColor: 'white', marginHorizontal: 16, marginBottom: 16, borderRadius: 12, padding: 16 },
-  input: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: '#FAFAFA' },
-  button: { backgroundColor: '#007AFF', padding: 12, borderRadius: 8, alignItems: 'center', marginBottom: 8 },
-  buttonSecondary: { backgroundColor: '#FF3B30' },
-  buttonText: { color: 'white', fontWeight: '600' },
-  listItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  listItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  listItemText: { fontSize: 16, color: '#1C1C1E', fontWeight: '600' },
-  statsSection: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F1F3', gap: 10 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1, borderColor: '#D1D5DB', backgroundColor: '#FAFAFA' },
-  chipActive: { borderColor: '#007AFF', backgroundColor: '#E6F0FF' },
-  chipText: { color: '#1C1C1E' },
-  swatchesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  swatch: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: '#D1D5DB' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalCard: { width: '100%', maxWidth: 560, backgroundColor: 'white', borderRadius: 16, padding: 16 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  modalTitle: { fontSize: 16, fontWeight: '600' },
-  controlRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  smallButton: { backgroundColor: '#E5E7EB', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 },
-  smallButtonText: { color: '#1C1C1E', fontWeight: '600' },
-  infoText: { fontSize: 14, color: '#8E8E93' },
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.background 
+  },
+  header: { 
+    padding: spacing.xl, 
+    backgroundColor: colors.surface, 
+    marginBottom: spacing.lg 
+  },
+  headerTitle: { 
+    fontSize: typography.fontSize['2xl'], 
+    fontWeight: typography.fontWeight.bold, 
+    color: colors.gray[900],
+    marginBottom: spacing.xs,
+  },
+  headerSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[600],
+    marginBottom: spacing.md,
+  },
+  cardContainer: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  sectionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray[900],
+    marginBottom: spacing.md,
+  },
+  deviceCard: {
+    marginBottom: spacing.lg,
+  },
+  deviceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  deviceId: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray[900],
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
+  },
+  statsLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[600],
+  },
+  statsValue: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray[900],
+  },
+  expandButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  expandButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary[500],
+    marginLeft: spacing.xs,
+  },
+  configSection: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray[200],
+  },
+  actionButtons: {
+    marginTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing['3xl'],
+  },
+  emptyStateText: {
+    fontSize: typography.fontSize.base,
+    color: colors.gray[500],
+    textAlign: 'center',
+  },
+  messageContainer: {
+    marginBottom: spacing.lg,
+  },
+  diagnosticSection: {
+    marginTop: spacing.sm,
+  },
+  diagnosticRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  diagnosticStatus: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[600],
+  },
 });
 
 type DeviceStatsLocal = Record<string, {
@@ -48,7 +131,7 @@ type DeviceStatsLocal = Record<string, {
   status: string | null;
   alarmMode: 'off' | 'sound' | 'led' | 'both';
   ledIntensity: number;
-  ledColor: [number, number, number];
+  ledColor: { r: number; g: number; b: number };
   saving?: boolean;
   saveError?: string | null;
 }>;
@@ -59,9 +142,12 @@ export default function LinkDeviceScreen() {
   const [deviceId, setDeviceId] = useState('');
   const [linkedDevices, setLinkedDevices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [unlinkingDevice, setUnlinkingDevice] = useState<string | null>(null);
+  const [dispensingDevice, setDispensingDevice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [deviceStats, setDeviceStats] = useState<DeviceStatsLocal>({});
-  const [colorPickerFor, setColorPickerFor] = useState<string | null>(null);
+  const [expandedDevices, setExpandedDevices] = useState<Set<string>>(new Set());
   const [loadingDevices, setLoadingDevices] = useState(false);
   const [diagnosticStatus, setDiagnosticStatus] = useState<string | null>(null);
 
@@ -120,6 +206,7 @@ export default function LinkDeviceScreen() {
           const alarmMode = (desired?.alarm_mode as 'off' | 'sound' | 'led' | 'both') ?? 'off';
           const ledIntensity = (desired?.led_intensity as number) ?? 512;
           const ledColorArr = (desired?.led_color_rgb as [number, number, number]) ?? [255, 0, 0];
+          const ledColor = { r: ledColorArr[0], g: ledColorArr[1], b: ledColorArr[2] };
           const last = (devData as any)?.lastKnownState || {};
           let battery: number | null = null;
           const rawBattery = last?.battery ?? last?.batteryPercent ?? last?.battery_percentage ?? last?.battery_level ?? null;
@@ -143,9 +230,9 @@ export default function LinkDeviceScreen() {
           } catch (e) {
             console.error('Error fetching status from RTDB', e);
           }
-          statsMap[id] = { battery, status, alarmMode, ledIntensity, ledColor: ledColorArr, saving: false, saveError: null };
+          statsMap[id] = { battery, status, alarmMode, ledIntensity, ledColor, saving: false, saveError: null };
         } catch (e) {
-          statsMap[id] = { battery: null, status: null, alarmMode: 'off', ledIntensity: 512, ledColor: [255, 0, 0], saving: false, saveError: 'No se pudo leer datos del dispositivo (Firestore).' };
+          statsMap[id] = { battery: null, status: null, alarmMode: 'off', ledIntensity: 512, ledColor: { r: 255, g: 0, b: 0 }, saving: false, saveError: 'No se pudo leer datos del dispositivo (Firestore).' };
         }
       }
       setDeviceStats(statsMap);
@@ -165,6 +252,7 @@ export default function LinkDeviceScreen() {
   const handleLink = async () => {
     console.log('[DEBUG] handleLink called');
     setError(null);
+    setSuccessMessage(null);
 
     // Log Redux state
     console.log('[DEBUG] Redux auth state:', {
@@ -189,6 +277,7 @@ export default function LinkDeviceScreen() {
       setLoading(true);
       await linkDeviceToUser(userId, deviceId.trim());
       console.log('[DEBUG] Device linking successful, refreshing device list...');
+      setSuccessMessage('Dispositivo enlazado exitosamente');
       setDeviceId('');
       await refreshLinkedDevices();
       console.log('[DEBUG] Device list refreshed successfully');
@@ -206,6 +295,10 @@ export default function LinkDeviceScreen() {
   };
 
   const handleDispense = async (id: string) => {
+    setError(null);
+    setSuccessMessage(null);
+    setDispensingDevice(id);
+    
     try {
       const rdb = await getRdbInstance();
       const auth = await getAuthInstance();
@@ -226,70 +319,55 @@ export default function LinkDeviceScreen() {
         requestedAt: Date.now(),
       };
       await set(reqRef, payload);
+      setSuccessMessage('Solicitud de dispensación enviada');
     } catch (e: any) {
       setError(e.message || 'No se pudo dispensar');
+    } finally {
+      setDispensingDevice(null);
     }
   };
 
   const handleUnlink = async (id: string) => {
     setError(null);
+    setSuccessMessage(null);
     if (!userId) {
       setError('Debes iniciar sesión para desenlazar un dispositivo.');
       return;
     }
     try {
-      setLoading(true);
+      setUnlinkingDevice(id);
       await unlinkDeviceFromUser(userId, id);
+      setSuccessMessage('Dispositivo desenlazado exitosamente');
       await refreshLinkedDevices();
     } catch (e: any) {
       setError(e.message || 'No se pudo desenlazar el dispositivo');
     } finally {
-      setLoading(false);
+      setUnlinkingDevice(null);
     }
   };
 
-  const setAlarmMode = (id: string, mode: 'off' | 'sound' | 'led' | 'both') => {
-    setDeviceStats((prev) => ({
-      ...prev,
-      [id]: { ...(prev[id] || {}), alarmMode: mode }
-    }));
-  };
-
-  const adjustIntensity = (id: string, delta: number) => {
-    setDeviceStats((prev) => {
-      const current = prev[id] || { ledIntensity: 512 } as any;
-      let next = Math.max(0, Math.min(1023, (current.ledIntensity ?? 512) + delta));
-      return { ...prev, [id]: { ...(prev[id] || {}), ledIntensity: next } };
+  const toggleDeviceExpanded = (id: string) => {
+    setExpandedDevices((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
     });
   };
 
-  const setColor = (id: string, rgb: [number, number, number]) => {
-    setDeviceStats((prev) => ({
-      ...prev,
-      [id]: { ...(prev[id] || {}), ledColor: rgb }
-    }));
-  };
-
-  const setIntensity = (id: string, value: number) => {
-    setDeviceStats((prev) => ({
-      ...prev,
-      [id]: { ...(prev[id] || {}), ledIntensity: Math.max(0, Math.min(1023, Math.round(value))) }
-    }));
-  };
-
-  const hexToRgb = (hex: string): [number, number, number] => {
-    const clean = hex.replace('#', '');
-    const r = parseInt(clean.substring(0, 2), 16);
-    const g = parseInt(clean.substring(2, 4), 16);
-    const b = parseInt(clean.substring(4, 6), 16);
-    return [r, g, b];
-  };
-
-  const saveDeviceConfig = async (id: string) => {
+  const saveDeviceConfig = async (id: string, config: {
+    alarmMode: 'off' | 'sound' | 'led' | 'both';
+    ledIntensity: number;
+    ledColor: { r: number; g: number; b: number };
+  }) => {
+    setError(null);
+    setSuccessMessage(null);
     setDeviceStats((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), saving: true, saveError: null } }));
+    
     try {
-      const cfg = deviceStats[id];
-      if (!cfg) throw new Error('Sin configuración local');
       const auth = await getAuthInstance();
       if (!auth || !auth.currentUser || auth.currentUser.uid !== userId) {
         throw new Error('Usuario no autenticado');
@@ -302,9 +380,9 @@ export default function LinkDeviceScreen() {
       
       // Persist minimal config to Firestore desiredConfig; Cloud Function will mirror to RTDB
       const payload = {
-        led_intensity: cfg.ledIntensity,
-        led_color_rgb: cfg.ledColor,
-        alarm_mode: cfg.alarmMode,
+        led_intensity: config.ledIntensity,
+        led_color_rgb: [config.ledColor.r, config.ledColor.g, config.ledColor.b],
+        alarm_mode: config.alarmMode,
       };
       await setDoc(
         doc(dbInst, 'devices', id),
@@ -314,9 +392,25 @@ export default function LinkDeviceScreen() {
         },
         { merge: true }
       );
-      setDeviceStats((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), saving: false } }));
+      
+      // Update local state
+      setDeviceStats((prev) => ({ 
+        ...prev, 
+        [id]: { 
+          ...(prev[id] || {}), 
+          alarmMode: config.alarmMode,
+          ledIntensity: config.ledIntensity,
+          ledColor: config.ledColor,
+          saving: false,
+          saveError: null,
+        } 
+      }));
+      
+      setSuccessMessage('Configuración guardada exitosamente');
     } catch (e: any) {
-      setDeviceStats((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), saving: false, saveError: e?.message || 'Error al guardar configuración' } }));
+      const errorMsg = e?.message || 'Error al guardar configuración';
+      setDeviceStats((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), saving: false, saveError: errorMsg } }));
+      setError(errorMsg);
     }
   };
 
@@ -342,151 +436,214 @@ export default function LinkDeviceScreen() {
   return (
     <SafeAreaView edges={['top','bottom']} style={styles.container}>
       <ScrollView>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Enlazar Dispositivo</Text>
-        <Text style={styles.infoText}>Agrega tu Pillbox para habilitar estado en tiempo real y notificaciones.</Text>
-        <View style={{ marginTop: 8 }}>
-          <Button onPress={() => router.push('/device/provision')} variant="secondary" size="md">Provisionar nuevo dispositivo</Button>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Enlazar Dispositivo</Text>
+          <Text style={styles.headerSubtitle}>
+            Agrega tu Pillbox para habilitar estado en tiempo real y notificaciones.
+          </Text>
+          <Button 
+            onPress={() => router.push('/device/provision')} 
+            variant="secondary" 
+            size="md"
+          >
+            Provisionar nuevo dispositivo
+          </Button>
         </View>
-      </View>
 
-      <View style={styles.card}>
-        <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>Ingresar Device ID</Text>
-        <PHTextField
-          placeholder="DEVICE-001"
-          value={deviceId}
-          onChangeText={setDeviceId}
-          autoCapitalize="none"
-          style={styles.input}
-        />
-        <Button onPress={handleLink} disabled={loading}>
-          {loading ? 'Enlazando...' : 'Enlazar'}
-        </Button>
-        {error && <Text style={{ color: '#FF3B30' }}>{error}</Text>}
-      </View>
+        {/* Success/Error Messages */}
+        {successMessage && (
+          <View style={[styles.cardContainer, styles.messageContainer]}>
+            <SuccessMessage
+              message={successMessage}
+              onDismiss={() => setSuccessMessage(null)}
+            />
+          </View>
+        )}
 
-      <View style={styles.card}>
-        <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>Dispositivos Enlazados</Text>
-        {loadingDevices ? (
-          <Text style={styles.infoText}>Cargando dispositivos...</Text>
-        ) : linkedDevices.length === 0 ? (
-          <Text style={styles.infoText}>No hay dispositivos enlazados.</Text>
-        ) : (
-          linkedDevices.map((id) => {
-            const stats = deviceStats[id];
-            const colorHex = stats?.ledColor ? `#${stats.ledColor.map((c) => c.toString(16).padStart(2, '0')).join('')}` : '#000000';
-            return (
-              <View key={id} style={styles.listItem}>
-                <View style={styles.listItemRow}>
-                  <Text style={styles.listItemText}>{id}</Text>
-                  <Button
-                    onPress={() => handleUnlink(id)}
-                    variant="secondary"
-                    size="md"
-                  >
-                    Desenlazar
-                  </Button>
-                </View>
-                <View style={styles.statsSection}>
-                  <View style={styles.statsRow}>
-                    <Text style={styles.infoText}>Batería</Text>
-                    <Text style={{ fontWeight: '600', color: '#1C1C1E' }}>{stats?.battery != null ? `${stats?.battery}%` : 'N/D'}</Text>
-                  </View>
-                  <View style={styles.statsRow}>
-                    <Text style={styles.infoText}>Estado</Text>
-                    <Text style={{ fontWeight: '600', color: '#1C1C1E' }}>{stats?.status ?? 'N/D'}</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.infoText}>Modo de alarma</Text>
-                    <View style={styles.chipRow}>
-                      {['off', 'sound', 'led', 'both'].map((mode) => (
-                        <Button
-                          key={mode}
-                          style={[styles.chip, stats?.alarmMode === mode ? styles.chipActive : {}]}
-                          onPress={() => setAlarmMode(id, mode as any)}
-                        >
-                          <Text style={styles.chipText}>
-                            {mode === 'off' ? 'Apagado' : mode === 'sound' ? 'Sonido' : mode === 'led' ? 'Luz' : 'Ambos'}
-                          </Text>
-                        </Button>
-                      ))}
-                    </View>
-                  </View>
-                  <View>
-                    <View style={styles.statsRow}>
-                      <Text style={styles.infoText}>Intensidad LED</Text>
-                      <Text style={{ fontWeight: '600', color: '#1C1C1E' }}>{stats?.ledIntensity ?? 512}</Text>
-                    </View>
-                    <Slider
-                      minimumValue={0}
-                      maximumValue={1023}
-                      step={1}
-                      value={stats?.ledIntensity ?? 512}
-                      onValueChange={(val) => setIntensity(id, val)}
-                      style={{ marginVertical: 8 }}
-                      minimumTrackTintColor="#007AFF"
-                      maximumTrackTintColor="#D1D5DB"
-                    />
-                  </View>
-                  <View>
-                    <View style={styles.statsRow}>
-                      <Text style={styles.infoText}>Color LED</Text>
-                      <View style={[styles.swatch, { backgroundColor: colorHex }]} />
-                    </View>
-                    <View style={{ marginTop: 8 }}>
-                      <Button onPress={() => setColorPickerFor(id)} variant="secondary" size="md">
-                        Editar color
+        {error && (
+          <View style={[styles.cardContainer, styles.messageContainer]}>
+            <ErrorMessage
+              message={error}
+              onDismiss={() => setError(null)}
+              variant="banner"
+            />
+          </View>
+        )}
+
+        {/* Link Device Section */}
+        <View style={styles.cardContainer}>
+          <Card variant="elevated" padding="lg">
+            <Text style={styles.sectionTitle}>Ingresar Device ID</Text>
+            <Input
+              placeholder="DEVICE-001"
+              value={deviceId}
+              onChangeText={setDeviceId}
+              autoCapitalize="none"
+              variant="outlined"
+              size="md"
+              containerStyle={{ marginBottom: spacing.md }}
+            />
+            <Button 
+              onPress={handleLink} 
+              loading={loading}
+              disabled={loading || !deviceId.trim()}
+              fullWidth
+            >
+              Enlazar
+            </Button>
+          </Card>
+        </View>
+
+        {/* Linked Devices Section */}
+        <View style={styles.cardContainer}>
+          <Card variant="elevated" padding="lg">
+            <Text style={styles.sectionTitle}>Dispositivos Enlazados</Text>
+            
+            {loadingDevices ? (
+              <LoadingSpinner 
+                size="md" 
+                text="Cargando dispositivos..." 
+              />
+            ) : linkedDevices.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>
+                  No hay dispositivos enlazados.
+                </Text>
+              </View>
+            ) : (
+              linkedDevices.map((id, index) => {
+                const stats = deviceStats[id];
+                const isExpanded = expandedDevices.has(id);
+                
+                return (
+                  <AnimatedListItem key={id} index={index} delay={100}>
+                    <Card 
+                      variant="outlined" 
+                      padding="md"
+                      style={styles.deviceCard}
+                    >
+                    {/* Device Header */}
+                    <View style={styles.deviceHeader}>
+                      <Text style={styles.deviceId}>{id}</Text>
+                      <Button
+                        onPress={() => handleUnlink(id)}
+                        variant="danger"
+                        size="sm"
+                        loading={unlinkingDevice === id}
+                        disabled={unlinkingDevice === id}
+                      >
+                        Desenlazar
                       </Button>
                     </View>
-                    <Modal visible={colorPickerFor === id} transparent animationType="fade" onRequestClose={() => setColorPickerFor(null)}>
-                      <View style={styles.modalOverlay}>
-                        <View style={styles.modalCard}>
-                          <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Colors</Text>
-                            <Button variant="secondary" size="sm" onPress={() => setColorPickerFor(null)}>
-                              Cerrar
-                            </Button>
-                          </View>
-                          <ColorPickerScaffold
-                            value={colorHex}
-                            onCompleteJS={({ hex }) => {
-                              setColor(id, hexToRgb(hex));
-                            }}
-                            style={{ marginTop: 8 }}
+
+                    {/* Device Stats */}
+                    <View style={styles.statsRow}>
+                      <Text style={styles.statsLabel}>Batería</Text>
+                      <Text style={styles.statsValue}>
+                        {stats?.battery != null ? `${stats?.battery}%` : 'N/D'}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.statsRow}>
+                      <Text style={styles.statsLabel}>Estado</Text>
+                      <Text style={styles.statsValue}>
+                        {stats?.status ?? 'N/D'}
+                      </Text>
+                    </View>
+
+                    {/* Expand/Collapse Button */}
+                    <TouchableOpacity 
+                      style={styles.expandButton}
+                      onPress={() => toggleDeviceExpanded(id)}
+                      accessibilityLabel={isExpanded ? 'Ocultar configuración' : 'Mostrar configuración'}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.expandButtonText}>
+                        {isExpanded ? '▼ Ocultar configuración' : '▶ Mostrar configuración'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Device Configuration Panel (Expanded) */}
+                    {stats && (
+                      <Collapsible collapsed={!isExpanded}>
+                        <View style={styles.configSection}>
+                          <DeviceConfigPanel
+                            deviceId={id}
+                            initialAlarmMode={stats.alarmMode}
+                            initialLedIntensity={stats.ledIntensity}
+                            initialLedColor={stats.ledColor}
+                            onSave={(config) => saveDeviceConfig(id, config)}
+                            loading={stats.saving}
                           />
+                          
+                          {stats.saveError && (
+                            <ErrorMessage
+                              message={stats.saveError}
+                              variant="inline"
+                              onDismiss={() => {
+                                setDeviceStats((prev) => ({
+                                  ...prev,
+                                  [id]: { ...(prev[id] || {}), saveError: null }
+                                }));
+                              }}
+                            />
+                          )}
                         </View>
-                      </View>
-                    </Modal>
-                  </View>
-                  <View style={styles.statsRow}>
-                    <Button onPress={() => saveDeviceConfig(id)} disabled={stats?.saving}>
-                      {stats?.saving ? 'Guardando...' : 'Guardar cambios'}
-                    </Button>
-                  </View>
-                  {stats?.saveError ? <Text style={{ color: '#FF3B30' }}>{stats?.saveError}</Text> : null}
-                </View>
-                <View style={{ marginTop: 16 }}>
-                  <Button onPress={() => handleDispense(id)}>Dispensar</Button>
-                </View>
-              </View>
-            );
-          })
-        )}
-      </View>
+                      </Collapsible>
+                    )}
 
-      <View style={styles.card}>
-        <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>Diagnóstico de Firestore</Text>
-        <View style={styles.statsRow}>
-          <Button onPress={diagnoseFirestoreConnection}>Probar conexión</Button>
-          <Text style={styles.infoText}>{diagnosticStatus ?? 'Sin pruebas'}</Text>
+                    {/* Dispense Button */}
+                    <View style={styles.actionButtons}>
+                      <Button 
+                        onPress={() => handleDispense(id)}
+                        variant="primary"
+                        fullWidth
+                        loading={dispensingDevice === id}
+                        disabled={dispensingDevice === id}
+                      >
+                        Dispensar
+                      </Button>
+                    </View>
+                  </Card>
+                  </AnimatedListItem>
+                );
+              })
+            )}
+          </Card>
         </View>
-      </View>
 
-      <View style={styles.card}>
-        <Button onPress={() => router.back()}>
-          Volver
-        </Button>
-      </View>
+        {/* Diagnostic Section */}
+        <View style={styles.cardContainer}>
+          <Card variant="elevated" padding="lg">
+            <Text style={styles.sectionTitle}>Diagnóstico de Firestore</Text>
+            <View style={styles.diagnosticSection}>
+              <View style={styles.diagnosticRow}>
+                <Button 
+                  onPress={diagnoseFirestoreConnection}
+                  variant="secondary"
+                  size="md"
+                >
+                  Probar conexión
+                </Button>
+                <Text style={styles.diagnosticStatus}>
+                  {diagnosticStatus ?? 'Sin pruebas'}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        </View>
+
+        {/* Back Button */}
+        <View style={styles.cardContainer}>
+          <Button 
+            onPress={() => router.back()}
+            variant="outline"
+            fullWidth
+          >
+            Volver
+          </Button>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

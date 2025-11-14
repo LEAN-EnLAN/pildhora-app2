@@ -1,21 +1,26 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, Alert, Modal, Linking, ScrollView, ActionSheetIOS, Platform, StyleSheet } from 'react-native';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { View, Text, FlatList, Alert, Linking, ActionSheetIOS, Platform, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Container } from '../../src/components/ui';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { RootState, AppDispatch } from '../../src/store';
 import { logout } from '../../src/store/slices/authSlice';
 import { fetchMedications } from '../../src/store/slices/medicationsSlice';
 import { startIntakesSubscription, stopIntakesSubscription } from '../../src/store/slices/intakesSlice';
-import AdherenceProgressChart from '../../src/components/AdherenceProgressChart';
-import { Card, Button } from '../../src/components/ui';
+import { Card, Button, Modal, LoadingSpinner, AnimatedListItem } from '../../src/components/ui';
+import { AdherenceCard } from '../../src/components/screens/patient/AdherenceCard';
+import { UpcomingDoseCard } from '../../src/components/screens/patient/UpcomingDoseCard';
+import { DeviceStatusCard } from '../../src/components/screens/patient/DeviceStatusCard';
+import { MedicationListItem } from '../../src/components/screens/patient/MedicationListItem';
 import { startDeviceListener, stopDeviceListener } from '../../src/store/slices/deviceSlice';
-import { Medication, DoseSegment, IntakeStatus } from '../../src/types';
+import { Medication, IntakeStatus } from '../../src/types';
 import { getDbInstance, getRdbInstance } from '../../src/services/firebase';
 import { addDoc, collection, Timestamp } from 'firebase/firestore';
 import { ref, get as rdbGet } from 'firebase/database';
+import { colors, spacing, typography, borderRadius, shadows } from '../../src/theme/tokens';
+
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<Medication>);
 
 const DAY_ABBREVS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const getTodayAbbrev = () => DAY_ABBREVS[new Date().getDay()];
@@ -56,9 +61,10 @@ export default function PatientHome() {
   const displayName = user?.name || (user?.email ? user.email.split('@')[0] : 'Paciente');
   const patientId = user?.id;
 
-  const [modalVisible, setModalVisible] = useState(false);
+  const [emergencyModalVisible, setEmergencyModalVisible] = useState(false);
   const [takingLoading, setTakingLoading] = useState(false);
   const [accountMenuVisible, setAccountMenuVisible] = useState(false);
+  const scrollY = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (patientId) {
@@ -78,35 +84,80 @@ export default function PatientHome() {
         if (!patientId) return;
         const rdb = await getRdbInstance();
         if (!rdb) return;
+        
+        // Get all linked devices for this user
         const snap = await rdbGet(ref(rdb, `users/${patientId}/devices`));
         const val = snap.val() || {};
-        const ids = Object.keys(val);
-        if (ids.length) {
-          setActiveDeviceId(ids[0]);
-          if (!deviceSlice?.listening) {
-            dispatch(startDeviceListener(ids[0]));
-          }
+        const deviceIds = Object.keys(val);
+        
+        if (deviceIds.length === 0) {
+          setActiveDeviceId(null);
+          return;
         }
-      } catch {}
+        
+        // If only one device, use it
+        if (deviceIds.length === 1) {
+          setActiveDeviceId(deviceIds[0]);
+          if (!deviceSlice?.listening) {
+            dispatch(startDeviceListener(deviceIds[0]));
+          }
+          return;
+        }
+        
+        // If multiple devices, find the most recently active one
+        const deviceStates = await Promise.all(
+          deviceIds.map(async (id) => {
+            try {
+              const stateSnap = await rdbGet(ref(rdb, `devices/${id}/state`));
+              const state = stateSnap.val() || {};
+              return {
+                id,
+                isOnline: state.is_online || false,
+                lastSeen: state.last_seen || 0,
+              };
+            } catch {
+              return { id, isOnline: false, lastSeen: 0 };
+            }
+          })
+        );
+        
+        // Prioritize: 1) Online devices, 2) Most recently seen
+        const sortedDevices = deviceStates.sort((a, b) => {
+          if (a.isOnline && !b.isOnline) return -1;
+          if (!a.isOnline && b.isOnline) return 1;
+          return b.lastSeen - a.lastSeen;
+        });
+        
+        const selectedDevice = sortedDevices[0].id;
+        setActiveDeviceId(selectedDevice);
+        
+        if (!deviceSlice?.listening) {
+          dispatch(startDeviceListener(selectedDevice));
+        }
+      } catch (error) {
+        console.error('Error initializing device:', error);
+      }
     };
+    
     initDevice();
+    
     return () => {
       if (deviceSlice?.listening) {
         dispatch(stopDeviceListener());
       }
     };
-  }, [patientId]);
+  }, [patientId, dispatch]);
 
-  const adherencePercentage = useMemo(() => {
+  const adherenceData = useMemo(() => {
     const todaysMeds = medications.filter(isScheduledToday);
-    if (todaysMeds.length === 0) return 1; // Perfect adherence if no meds scheduled
+    if (todaysMeds.length === 0) return { takenCount: 0, totalCount: 0 };
 
     let totalDoses = 0;
     todaysMeds.forEach(med => {
       totalDoses += med.times.length;
     });
 
-    if (totalDoses === 0) return 1;
+    if (totalDoses === 0) return { takenCount: 0, totalCount: 0 };
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -120,9 +171,13 @@ export default function PatientHome() {
         uniqueTaken.add(`${medKey}-${timeKey}`);
       }
     });
-    const takenUnique = uniqueTaken.size;
-    const ratio = takenUnique / totalDoses;
-    return Math.min(1, Math.max(0, ratio));
+    
+    console.log('[Adherence] Today meds:', todaysMeds.length);
+    console.log('[Adherence] Total doses:', totalDoses);
+    console.log('[Adherence] Total intakes:', intakes.length);
+    console.log('[Adherence] Taken today:', uniqueTaken.size);
+    
+    return { takenCount: uniqueTaken.size, totalCount: totalDoses };
   }, [medications, intakes]);
 
   const upcoming = useMemo(() => {
@@ -153,18 +208,20 @@ export default function PatientHome() {
     });
   }, [upcoming, intakes]);
 
-  const handleHistory = () => router.push('/patient/history');
-  const handleEmergency = () => handleEmergencyPress();
-  const callEmergency = (number: string) => {
+  const handleHistory = useCallback(() => {
+    router.push('/patient/history');
+  }, [router]);
+
+  const callEmergency = useCallback((number: string) => {
     try {
       Linking.openURL(`tel:${number}`);
     } catch (e) {
       // noop
     }
-    setModalVisible(false);
-  };
+    setEmergencyModalVisible(false);
+  }, []);
 
-  const handleEmergencyPress = () => {
+  const handleEmergencyPress = useCallback(() => {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
@@ -179,19 +236,32 @@ export default function PatientHome() {
         }
       );
     } else {
-      setModalVisible(true);
+      setEmergencyModalVisible(true);
     }
-  };
-  const handleLogout = async () => {
+  }, [callEmergency]);
+
+  const handleEmergency = useCallback(() => {
+    handleEmergencyPress();
+  }, [handleEmergencyPress]);
+
+  const handleLogout = useCallback(async () => {
     try {
       await dispatch(logout());
       router.replace('/auth/signup');
     } catch (error) {
       router.replace('/auth/signup');
     }
-  };
+  }, [dispatch, router]);
 
-  const handleAccountMenu = () => {
+  const handleConfiguraciones = useCallback(() => {
+    router.push('/patient/settings');
+  }, [router]);
+
+  const handleMiDispositivo = useCallback(() => {
+    router.push('/patient/link-device');
+  }, [router]);
+
+  const handleAccountMenu = useCallback(() => {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
@@ -208,12 +278,9 @@ export default function PatientHome() {
     } else {
       setAccountMenuVisible(!accountMenuVisible);
     }
-  };
+  }, [handleLogout, handleConfiguraciones, handleMiDispositivo, accountMenuVisible]);
 
-  const handleConfiguraciones = () => router.push('/patient/settings');
-  const handleMiDispositivo = () => router.push('/patient/link-device');
-
-  const handleTakeUpcomingMedication = async () => {
+  const handleTakeUpcomingMedication = useCallback(async () => {
     try {
       if (!upcoming) {
         Alert.alert('Sin dosis', 'No hay una dosis programada próxima para hoy.');
@@ -223,16 +290,23 @@ export default function PatientHome() {
         Alert.alert('Sesión requerida', 'Inicia sesión para registrar la toma.');
         return;
       }
+      
+      console.log('[TakeMedication] Starting...');
+      console.log('[TakeMedication] Medication:', upcoming.med.name);
+      console.log('[TakeMedication] Patient ID:', patientId);
+      
       setTakingLoading(true);
       const db = await getDbInstance();
       if (!db) {
         throw new Error('Firestore no disponible');
       }
+      
       const hh = Math.floor(upcoming.next);
       const mm = Math.round((upcoming.next - hh) * 60);
       const scheduledDate = new Date();
       scheduledDate.setHours(hh, mm, 0, 0);
-      await addDoc(collection(db, 'intakeRecords'), {
+      
+      const intakeData = {
         medicationName: upcoming.med.name,
         dosage: upcoming.med.dosage || '',
         scheduledTime: Timestamp.fromDate(scheduledDate),
@@ -241,204 +315,580 @@ export default function PatientHome() {
         takenAt: Timestamp.now(),
         ...(upcoming.med.id ? { medicationId: upcoming.med.id } : {}),
         caregiverId: upcoming.med.caregiverId,
-      } as any);
+      };
+      
+      console.log('[TakeMedication] Writing intake record:', intakeData);
+      
+      const docRef = await addDoc(collection(db, 'intakeRecords'), intakeData as any);
+      
+      console.log('[TakeMedication] Successfully written with ID:', docRef.id);
+      
       Alert.alert('Registrado', 'Se registró la toma de la dosis.');
     } catch (e: any) {
+      console.error('[TakeMedication] Error:', e);
       Alert.alert('Error', e?.message || 'No se pudo registrar la toma.');
     } finally {
       setTakingLoading(false);
     }
-  };
+  }, [upcoming, patientId]);
+
+  const deviceStatus = useMemo(() => {
+    if (!deviceSlice?.state) {
+      return {
+        deviceId: activeDeviceId,
+        batteryLevel: null,
+        status: 'offline' as const,
+        isOnline: false,
+      };
+    }
+    return {
+      deviceId: activeDeviceId,
+      batteryLevel: deviceSlice.state.battery_level,
+      status: deviceSlice.state.current_status || 'idle' as const,
+      isOnline: deviceSlice.state.is_online || false,
+    };
+  }, [deviceSlice, activeDeviceId]);
+
+  const renderMedicationItem = useCallback(({ item, index }: { item: Medication; index: number }) => (
+    <AnimatedListItem index={index} delay={50}>
+      <View style={styles.medicationItem}>
+        <MedicationListItem
+          medicationName={item.name}
+          dosage={item.dosage || ''}
+          times={item.times || []}
+          onPress={() => router.push(`/patient/medications/${item.id}`)}
+        />
+      </View>
+    </AnimatedListItem>
+  ), [router]);
+
+  if (loading) {
+    return (
+      <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <LoadingSpinner size="lg" text="Cargando información..." />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['top','bottom']} style={styles.container}>
-      <Container style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>PILDHORA</Text>
-          <Text style={styles.headerSubtitle}>Hola, {displayName}</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <Button variant="danger" size="sm" onPress={handleEmergency}>
-            <Ionicons name="alert" size={20} color="#FFFFFF" />
-          </Button>
-          <Button variant="secondary" size="sm" onPress={handleAccountMenu}>
-            <Ionicons name="person" size={20} color="#374151" />
-          </Button>
-        </View>
-      </View>
-
-      {Platform.OS !== 'ios' && (
-        <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalView}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Emergencia</Text>
-                <Text style={styles.modalSubtitle}>Selecciona una opción:</Text>
-                <View style={styles.modalActions}>
-                  <Button variant="danger" size="lg" onPress={() => callEmergency('911')}>Llamar 911</Button>
-                  <Button variant="secondary" size="lg" onPress={() => callEmergency('112')}>Llamar 112</Button>
-                  <Button variant="secondary" size="lg" onPress={() => setModalVisible(false)}>Cancelar</Button>
-                </View>
-              </View>
-            </View>
-
-            {deviceSlice?.state ? (
-              <View style={styles.contentPadding}>
-                <Card>
-                  <Text style={styles.cardTitle}>Mi dispositivo</Text>
-                  <View style={styles.upcomingContainer}>
-                    <View>
-                      <Text style={styles.upcomingMedInfo}>Estado: {deviceSlice.state.current_status || 'N/D'}</Text>
-                      <Text style={styles.upcomingMedInfo}>Batería: {typeof deviceSlice.state.battery_level === 'number' ? `${deviceSlice.state.battery_level}%` : 'N/D'}</Text>
-                      <Text style={styles.upcomingMedInfo}>Conexión: {deviceSlice.state.is_online ? 'En línea' : 'Desconectado'}</Text>
-                    </View>
-                  </View>
-                </Card>
-              </View>
-            ) : null}
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>PILDHORA</Text>
+            <Text style={styles.headerSubtitle}>Hola, {displayName}</Text>
           </View>
-        </Modal>
-      )}
-
-      {Platform.OS !== 'ios' && (
-        <Modal visible={accountMenuVisible} transparent animationType="fade" onRequestClose={() => setAccountMenuVisible(false)}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalView}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Cuenta</Text>
-                <Text style={styles.modalSubtitle}>Selecciona una opción:</Text>
-                <View style={styles.modalActions}>
-                  <Button variant="danger" size="lg" onPress={() => { setAccountMenuVisible(false); handleLogout(); }}>Salir de sesión</Button>
-                  <Button variant="secondary" size="lg" onPress={() => { setAccountMenuVisible(false); handleConfiguraciones(); }}>Configuraciones</Button>
-                  <Button variant="secondary" size="lg" onPress={() => { setAccountMenuVisible(false); handleMiDispositivo(); }}>Mi dispositivo</Button>
-                  <Button variant="secondary" size="lg" onPress={() => setAccountMenuVisible(false)}>Cancelar</Button>
-                </View>
-              </View>
-            </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={styles.iconButton}
+              onPress={handleEmergency}
+              accessibilityLabel="Botón de emergencia"
+              accessibilityHint="Llama a servicios de emergencia"
+              accessibilityRole="button"
+            >
+              <Ionicons name="alert-circle" size={28} color={colors.error} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.iconButton}
+              onPress={handleAccountMenu}
+              accessibilityLabel="Menú de cuenta"
+              accessibilityHint="Abre opciones de cuenta y configuración"
+              accessibilityRole="button"
+            >
+              <Ionicons name="person-circle-outline" size={28} color={colors.gray[700]} />
+            </TouchableOpacity>
           </View>
-        </Modal>
-      )}
+        </View>
 
-      <FlatList
-        data={medications.filter(isScheduledToday)}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={() => (
-          <>
-            <View style={styles.contentPadding}>
-              <Card>
-                <Text style={styles.cardTitle}>Estado del día</Text>
-                <View style={styles.doseRingContainer}>
-                  <AdherenceProgressChart progress={adherencePercentage} />
-                </View>
-              </Card>
+        {/* Emergency Modal */}
+        {Platform.OS !== 'ios' && (
+          <Modal 
+            visible={emergencyModalVisible} 
+            onClose={() => setEmergencyModalVisible(false)}
+            title="Emergencia"
+            size="sm"
+            animationType="slide"
+          >
+            <Text style={styles.modalSubtitle}>Selecciona una opción:</Text>
+            <View style={styles.modalActions}>
+              <Button variant="danger" size="lg" fullWidth onPress={() => callEmergency('911')}>
+                Llamar 911
+              </Button>
+              <Button variant="secondary" size="lg" fullWidth onPress={() => callEmergency('112')}>
+                Llamar 112
+              </Button>
+              <Button variant="secondary" size="lg" fullWidth onPress={() => setEmergencyModalVisible(false)}>
+                Cancelar
+              </Button>
             </View>
+          </Modal>
+        )}
 
-            <View style={styles.contentPadding}>
-              <Card>
-                <Text style={styles.cardTitle}>Próxima dosis</Text>
-                {upcoming ? (
-                  <View style={styles.upcomingContainer}>
-                    <View>
-                      <Text style={styles.upcomingMedName}>{upcoming.med.name}</Text>
-                      <Text style={styles.upcomingMedInfo}>{upcoming.med.dosage}</Text>
-                      <Text style={styles.upcomingMedInfo}>{formatHourDecimal(upcoming.next)}</Text>
+        {/* Account Menu Modal */}
+        {Platform.OS !== 'ios' && (
+          <Modal 
+            visible={accountMenuVisible} 
+            onClose={() => setAccountMenuVisible(false)}
+            title="Cuenta"
+            size="sm"
+            animationType="slide"
+          >
+            <Text style={styles.modalSubtitle}>Selecciona una opción:</Text>
+            <View style={styles.modalActions}>
+              <Button 
+                variant="danger" 
+                size="lg" 
+                fullWidth 
+                onPress={() => { 
+                  setAccountMenuVisible(false); 
+                  handleLogout(); 
+                }}
+              >
+                Salir de sesión
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="lg" 
+                fullWidth 
+                onPress={() => { 
+                  setAccountMenuVisible(false); 
+                  handleConfiguraciones(); 
+                }}
+              >
+                Configuraciones
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="lg" 
+                fullWidth 
+                onPress={() => { 
+                  setAccountMenuVisible(false); 
+                  handleMiDispositivo(); 
+                }}
+              >
+                Mi dispositivo
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="lg" 
+                fullWidth 
+                onPress={() => setAccountMenuVisible(false)}
+              >
+                Cancelar
+              </Button>
+            </View>
+          </Modal>
+        )}
+
+        {/* Main Content */}
+        <AnimatedFlatList
+          data={medications.filter(isScheduledToday)}
+          keyExtractor={(item) => item.id}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: true }
+          )}
+          scrollEventThrottle={16}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={50}
+          initialNumToRender={10}
+          windowSize={10}
+          contentContainerStyle={styles.scrollContent}
+          ListHeaderComponent={() => (
+            <>
+              {/* Adherence Card */}
+              <View style={styles.section}>
+                <AdherenceCard
+                  takenCount={adherenceData.takenCount}
+                  totalCount={adherenceData.totalCount}
+                />
+              </View>
+
+              {/* Upcoming Dose Card - Autonomous Mode (Manual) */}
+              {upcoming && !deviceStatus.isOnline && (
+                <View style={styles.section}>
+                  <UpcomingDoseCard
+                    medicationName={upcoming.med.name}
+                    dosage={upcoming.med.dosage || ''}
+                    scheduledTime={formatHourDecimal(upcoming.next)}
+                    onTakeMedication={handleTakeUpcomingMedication}
+                    loading={takingLoading}
+                  />
+                </View>
+              )}
+
+              {/* Upcoming Dose Card - Caregiving Mode (Automatic) */}
+              {upcoming && deviceStatus.isOnline && (
+                <View style={styles.section}>
+                  <Card variant="elevated" padding="lg">
+                    <View style={styles.upcomingHeader}>
+                      <Ionicons name="time-outline" size={24} color={colors.primary[500]} />
+                      <Text style={styles.cardTitle}>Próxima dosis</Text>
                     </View>
-                    {deviceSlice?.deviceID ? (
-                      <Text style={styles.upcomingMedInfo}>Controlado por el dispositivo</Text>
-                    ) : (
-                      <Button
-                        variant="primary"
-                        size="md"
-                        onPress={handleTakeUpcomingMedication}
-                        disabled={takingLoading}
-                      >
-                        Tomar medicación
-                      </Button>
-                    )}
+                    <View style={styles.upcomingContent}>
+                      <View style={styles.upcomingInfo}>
+                        <Text style={styles.upcomingMedName}>{upcoming.med.name}</Text>
+                        <Text style={styles.upcomingMedInfo}>{upcoming.med.dosage}</Text>
+                        <View style={styles.timeChip}>
+                          <Ionicons name="alarm-outline" size={16} color={colors.primary[500]} />
+                          <Text style={styles.timeChipText}>{formatHourDecimal(upcoming.next)}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.deviceBadge}>
+                        <Ionicons name="hardware-chip-outline" size={16} color={colors.info} />
+                        <Text style={styles.deviceBadgeText}>Automático</Text>
+                      </View>
+                    </View>
+                  </Card>
+                </View>
+              )}
+
+              {!upcoming && (
+                <View style={styles.section}>
+                  <Card variant="outlined" padding="lg">
+                    <View style={styles.emptyUpcoming}>
+                      <Ionicons name="checkmark-circle-outline" size={48} color={colors.success} />
+                      <Text style={styles.emptyUpcomingTitle}>¡Todo listo!</Text>
+                      <Text style={styles.emptyUpcomingText}>
+                        No hay más dosis programadas para hoy
+                      </Text>
+                    </View>
+                  </Card>
+                </View>
+              )}
+
+              {/* Device Status Card */}
+              <View style={styles.section}>
+                <DeviceStatusCard
+                  deviceId={deviceStatus.deviceId || undefined}
+                  batteryLevel={deviceStatus.batteryLevel}
+                  status={deviceStatus.status}
+                  isOnline={deviceStatus.isOnline}
+                />
+                
+                {/* Mode Indicator */}
+                {deviceStatus.isOnline && (
+                  <View style={styles.modeIndicator}>
+                    <Ionicons name="shield-checkmark" size={16} color={colors.success} />
+                    <Text style={styles.modeIndicatorText}>
+                      Modo supervisado: Tu cuidador gestiona tus medicamentos
+                    </Text>
                   </View>
-                ) : (
-                  <Text style={styles.noUpcoming}>No hay dosis próximas para hoy.</Text>
                 )}
-              </Card>
-            </View>
+              </View>
 
-            <View style={styles.cardPadding}>
-              <Card>
-                <View style={styles.historyContainer}>
-                  <View style={styles.historyInfo}>
-                    <Ionicons name="time" size={22} color="#1C1C1E" />
-                    <View>
-                      <Text style={styles.cardTitle}>Historial</Text>
-                      <Text style={styles.historySubtitle}>Dosis y eventos anteriores</Text>
+              {/* Quick Actions */}
+              <View style={styles.section}>
+                <View style={styles.quickActions}>
+                  <TouchableOpacity 
+                    style={styles.quickActionCard}
+                    onPress={handleHistory}
+                    accessibilityLabel="Ver historial"
+                    accessibilityHint="Muestra el historial de dosis y eventos"
+                    accessibilityRole="button"
+                  >
+                    <View style={styles.quickActionIcon}>
+                      <Ionicons name="time-outline" size={24} color={colors.primary[500]} />
                     </View>
-                  </View>
-                  <Button variant="primary" size="sm" onPress={handleHistory}>Abrir</Button>
-                </View>
-              </Card>
-            </View>
+                    <Text style={styles.quickActionTitle} numberOfLines={1}>Historial</Text>
+                  </TouchableOpacity>
 
-            <View style={styles.cardPadding}>
-              <View style={styles.todayHeader}>
-                <Text style={styles.cardTitle}>Hoy</Text>
-                <Link href="/patient/medications" asChild>
-                  <Button variant="primary" size="md" onPress={() => {}}>Mis Medicamentos</Button>
-                </Link>
-              </View>
-            </View>
-          </>
-        )}
-        renderItem={({ item }) => (
-          <View style={styles.cardPadding}>
-            <Card>
-              <View style={styles.medicationContainer}>
-                <View style={styles.medicationInfo}>
-                  <Text style={styles.medicationName}>{item.name}</Text>
-                  <Text style={styles.medicationDosage}>{item.dosage}</Text>
-                  {(() => {
-                    const next = getNextTimeToday(item);
-                    return next !== null ? <Text style={styles.medicationDosage}>Próxima: {formatHourDecimal(next)}</Text> : null;
-                  })()}
+                  {/* Only show Medications management in Autonomous Mode (no device connected) */}
+                  {!deviceStatus.isOnline && (
+                    <TouchableOpacity 
+                      style={styles.quickActionCard}
+                      onPress={() => router.push('/patient/medications')}
+                      accessibilityLabel="Ver medicamentos"
+                      accessibilityHint="Muestra todos tus medicamentos"
+                      accessibilityRole="button"
+                    >
+                      <View style={styles.quickActionIcon}>
+                        <Ionicons name="medical-outline" size={24} color={colors.primary[500]} />
+                      </View>
+                      <Text style={styles.quickActionTitle} numberOfLines={1}>Medicamentos</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity 
+                    style={styles.quickActionCard}
+                    onPress={() => router.push('/patient/link-device')}
+                    accessibilityLabel="Dispositivo"
+                    accessibilityHint="Gestiona tu dispositivo Pillbox"
+                    accessibilityRole="button"
+                  >
+                    <View style={styles.quickActionIcon}>
+                      <Ionicons name="hardware-chip-outline" size={24} color={colors.primary[500]} />
+                    </View>
+                    <Text style={styles.quickActionTitle} numberOfLines={1}>Dispositivo</Text>
+                  </TouchableOpacity>
                 </View>
-                <Link href={`/patient/medications/${item.id}`} asChild>
-                  <Button variant="secondary" size="sm" onPress={() => {}}>Abrir</Button>
-                </Link>
               </View>
-            </Card>
-          </View>
-        )}
-      />
-      </Container>
+
+              {/* Today's Medications Header */}
+              {medications.filter(isScheduledToday).length > 0 && (
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Medicamentos de hoy</Text>
+                    <Text style={styles.sectionCount}>
+                      {medications.filter(isScheduledToday).length}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+          renderItem={renderMedicationItem}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyMedicationsContainer}>
+              <Ionicons name="calendar-outline" size={64} color={colors.gray[300]} />
+              <Text style={styles.emptyMedicationsTitle}>Sin medicamentos hoy</Text>
+              <Text style={styles.emptyMedicationsText}>
+                No tienes medicamentos programados para hoy
+              </Text>
+              <Button 
+                variant="primary" 
+                size="md"
+                onPress={() => router.push('/patient/medications')}
+                style={styles.emptyMedicationsButton}
+              >
+                Ver todos los medicamentos
+              </Button>
+            </View>
+          )}
+        />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F3F4F6' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: '#111827' },
-  headerSubtitle: { fontSize: 14, color: '#6B7280' },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  modalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  modalView: { backgroundColor: 'white', width: '100%', maxWidth: 384, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 20, elevation: 5 },
-  modalContent: { padding: 24 },
-  modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#1F2937', marginBottom: 8 },
-  modalSubtitle: { color: '#4B5563', marginBottom: 24, textAlign: 'center' },
-  modalActions: { gap: 12 },
-  contentPadding: { paddingHorizontal: 16, paddingTop: 16 },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
-  doseRingContainer: { alignItems: 'center', justifyContent: 'center' },
-  upcomingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  upcomingMedName: { fontSize: 16, fontWeight: '600', color: '#111827' },
-  upcomingMedInfo: { color: '#4B5563' },
-  noUpcoming: { color: '#6B7280' },
-  cardPadding: { paddingHorizontal: 16, marginTop: 8 },
-  historyContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  historyInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  historySubtitle: { color: '#4B5563' },
-  todayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  medicationContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  medicationInfo: { flex: 1 },
-  medicationName: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 4 },
-  medicationDosage: { color: '#4B5563', marginBottom: 4 },
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    backgroundColor: colors.surface, 
+    paddingHorizontal: spacing.lg, 
+    paddingVertical: spacing.lg,
+    ...shadows.sm,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  headerTitle: { 
+    fontSize: typography.fontSize['2xl'], 
+    fontWeight: typography.fontWeight.extrabold, 
+    color: colors.primary[500],
+    letterSpacing: 0.5,
+  },
+  headerSubtitle: { 
+    fontSize: typography.fontSize.base, 
+    color: colors.gray[600],
+    marginTop: spacing.xs,
+  },
+  headerActions: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: spacing.sm,
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.gray[50],
+  },
+  scrollContent: {
+    paddingBottom: spacing['3xl'],
+  },
+  section: {
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+  },
+  modalSubtitle: { 
+    fontSize: typography.fontSize.base,
+    color: colors.gray[600], 
+    marginBottom: spacing.lg,
+  },
+  modalActions: { 
+    gap: spacing.md,
+  },
+  cardTitle: { 
+    fontSize: typography.fontSize.lg, 
+    fontWeight: typography.fontWeight.semibold, 
+    color: colors.gray[900],
+    marginLeft: spacing.sm,
+  },
+  upcomingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  upcomingContent: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-start', 
+    justifyContent: 'space-between',
+  },
+  upcomingInfo: {
+    flex: 1,
+  },
+  upcomingMedName: { 
+    fontSize: typography.fontSize.xl, 
+    fontWeight: typography.fontWeight.bold, 
+    color: colors.gray[900],
+    marginBottom: spacing.xs,
+  },
+  upcomingMedInfo: { 
+    fontSize: typography.fontSize.base,
+    color: colors.gray[600],
+    marginBottom: spacing.md,
+  },
+  timeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
+    gap: spacing.xs,
+  },
+  timeChipText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[500],
+  },
+  deviceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.gray[100],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    gap: spacing.xs,
+  },
+  deviceBadgeText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.info,
+    fontWeight: typography.fontWeight.medium,
+  },
+  emptyUpcoming: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+  },
+  emptyUpcomingTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[900],
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  emptyUpcomingText: {
+    fontSize: typography.fontSize.base,
+    color: colors.gray[600],
+    textAlign: 'center',
+  },
+  quickActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  quickActionCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 100,
+    ...shadows.sm,
+  },
+  quickActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary[50],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  quickActionTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray[900],
+    textAlign: 'center',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[900],
+  },
+  sectionCount: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[500],
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  medicationItem: {
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
+  },
+  emptyMedicationsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing['3xl'],
+    paddingHorizontal: spacing.xl,
+  },
+  emptyMedicationsTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[900],
+    marginTop: spacing.lg,
+    marginBottom: spacing.xs,
+  },
+  emptyMedicationsText: {
+    fontSize: typography.fontSize.base,
+    color: colors.gray[600],
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+  },
+  emptyMedicationsButton: {
+    marginTop: spacing.md,
+  },
+  modeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.success + '10', // 10% opacity
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  modeIndicatorText: {
+    flex: 1,
+    fontSize: typography.fontSize.xs,
+    color: colors.gray[700],
+    lineHeight: typography.fontSize.xs * typography.lineHeight.normal,
+  },
 });

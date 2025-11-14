@@ -94,14 +94,70 @@ A comprehensive smart pillbox management system with separate interfaces for eld
 ```
 src/
 ├── components/          # Reusable UI components
-├── screens/            # Screen components
-├── navigation/         # Navigation configuration
+│   ├── ui/             # Core design system components
+│   ├── screens/        # Screen-specific components
+│   └── shared/         # Shared composite components
+├── theme/              # Design tokens and styling
 ├── services/           # API and hardware services
-├── store/             # Redux state management
-├── utils/             # Utilities and constants
-├── types/             # TypeScript definitions
-└── hooks/             # Custom React hooks
+├── store/              # Redux state management
+├── utils/              # Utilities and constants
+├── types/              # TypeScript definitions
+└── hooks/              # Custom React hooks
+
+app/                    # Expo Router screens
+├── caregiver/          # Caregiver-specific screens
+├── patient/            # Patient-specific screens
+├── auth/               # Authentication screens
+└── device/             # Device management screens
+
+docs/                   # Documentation
+├── DESIGN_SYSTEM.md    # Design system guide
+├── COMPONENT_DOCUMENTATION.md  # Component API docs
+├── MIGRATION_GUIDE.md  # Migration instructions
+└── ...                 # Additional documentation
 ```
+
+## Design System
+
+The application uses a comprehensive design system with reusable components and design tokens for consistent styling across all screens.
+
+### Core Components
+
+- **Button**: Versatile button with variants (primary, secondary, danger, ghost, outline)
+- **Card**: Container component with elevation and variants
+- **Input**: Unified text input with validation and error handling
+- **Modal**: Dialog component with animations and configurable sizes
+- **Chip**: Compact component for tags and selections
+- **ColorPicker**: Intuitive color picker with presets
+- **LoadingSpinner**: Loading indicator with size variants
+- **ErrorMessage**: Error display with retry options
+- **SuccessMessage**: Success feedback with auto-dismiss
+
+### Design Tokens
+
+```typescript
+import { colors, spacing, typography, borderRadius, shadows } from '@/theme/tokens';
+
+// Use tokens for consistent styling
+<View style={{
+  padding: spacing.lg,
+  backgroundColor: colors.surface,
+  borderRadius: borderRadius.md,
+  ...shadows.md,
+}}>
+```
+
+### Documentation
+
+**Quick Start**: See [UI Refactor Documentation Index](./docs/UI_REFACTOR_INDEX.md) for complete documentation overview.
+
+**Key Documents**:
+- [Design System Guide](./docs/DESIGN_SYSTEM.md) - Complete design system documentation
+- [Component Documentation](./docs/COMPONENT_DOCUMENTATION.md) - Detailed component API reference
+- [Migration Guide](./docs/MIGRATION_GUIDE.md) - Guide for migrating to new components
+- [Storybook Guide](./docs/STORYBOOK_GUIDE.md) - Component development and testing
+- [Accessibility Compliance](./docs/ACCESSIBILITY_COMPLIANCE.md) - Accessibility guidelines
+- [Performance Optimizations](./docs/PERFORMANCE_OPTIMIZATIONS.md) - Performance best practices
 
 ## Development Guidelines
 

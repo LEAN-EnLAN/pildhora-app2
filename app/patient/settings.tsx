@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react'
-import { View, Text, Switch, StyleSheet, Platform, ScrollView } from 'react-native'
+import { View, Text, StyleSheet, Platform, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Container, Card, Button, PHTextField } from '../../src/components/ui'
+import { Card } from '../../src/components/ui/Card'
+import { Button } from '../../src/components/ui/Button'
+import { SuccessMessage } from '../../src/components/ui/SuccessMessage'
+import { ErrorMessage } from '../../src/components/ui/ErrorMessage'
+import { NotificationSettings } from '../../src/components/shared/NotificationSettings'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState, AppDispatch } from '../../src/store'
 import { setNotificationsEnabled, setNotificationHierarchy, setNotificationPermissionStatus, addModality, removeModality } from '../../src/store/slices/preferencesSlice'
@@ -9,6 +13,7 @@ import { savePreferencesToBackend, savePermissionsToBackend } from '../../src/st
 import * as Notifications from 'expo-notifications'
 import Constants from 'expo-constants'
 import { ensurePushTokensRegistered } from '../../src/services/notifications/push'
+import { colors, spacing, typography } from '../../src/theme/tokens'
  
 
 export default function PatientSettings() {
@@ -18,8 +23,9 @@ export default function PatientSettings() {
   const uid = user?.id || ''
 
   const [notifStatus, setNotifStatus] = useState<'granted'|'denied'|'undetermined'>('undetermined')
-  const [newModality, setNewModality] = useState('')
-  const appVersion = Constants?.manifest2?.version || Constants?.expoConfig?.version || '0.0.0'
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const appVersion = Constants?.expoConfig?.version || '0.0.0'
 
   useEffect(() => {
     let mounted = true
@@ -32,192 +38,264 @@ export default function PatientSettings() {
     return () => { mounted = false }
   }, [dispatch])
 
-  const handleToggleNotifications = (enabled: boolean) => {
-    dispatch(setNotificationsEnabled(enabled))
-    if (uid) dispatch(savePreferencesToBackend(uid))
+  const showSuccess = (message: string) => {
+    setSuccessMessage(message)
+    setErrorMessage(null)
+  }
+
+  const showError = (message: string) => {
+    setErrorMessage(message)
+    setSuccessMessage(null)
+  }
+
+  const handleToggleNotifications = async (enabled: boolean) => {
+    try {
+      dispatch(setNotificationsEnabled(enabled))
+      if (uid) {
+        await dispatch(savePreferencesToBackend(uid))
+        showSuccess(enabled ? 'Notificaciones habilitadas' : 'Notificaciones deshabilitadas')
+      }
+    } catch (error) {
+      showError('Error al guardar preferencias')
+    }
   }
 
   const handleRequestNotifications = async () => {
-    const res = await Notifications.requestPermissionsAsync({
-      ios: { allowAlert: true, allowBadge: true, allowSound: true }
-    } as any)
-    const status = res.status as 'granted'|'denied'|'undetermined'
-    setNotifStatus(status)
-    dispatch(setNotificationPermissionStatus(status))
-    if (status === 'granted' && uid) {
-      await ensurePushTokensRegistered(uid)
-      await dispatch(savePermissionsToBackend(uid))
+    try {
+      const res = await Notifications.requestPermissionsAsync({
+        ios: { allowAlert: true, allowBadge: true, allowSound: true }
+      } as any)
+      const status = res.status as 'granted'|'denied'|'undetermined'
+      setNotifStatus(status)
+      dispatch(setNotificationPermissionStatus(status))
+      
+      if (status === 'granted' && uid) {
+        await ensurePushTokensRegistered(uid)
+        await dispatch(savePermissionsToBackend(uid))
+        showSuccess('Permisos de notificación concedidos')
+      } else if (status === 'denied') {
+        showError('Permisos de notificación denegados. Por favor, habilítalos en la configuración del sistema.')
+      }
+    } catch (error) {
+      showError('Error al solicitar permisos de notificación')
     }
   }
 
-  const setHierarchyPreset = (preset: 'default'|'medicationFirst'|'generalLast') => {
-    const map: Record<string, string[]> = {
-      default: ['urgent','medication','general'],
-      medicationFirst: ['medication','urgent','general'],
-      generalLast: ['urgent','general','medication'],
+  const handleUpdateHierarchy = async (hierarchy: string[]) => {
+    try {
+      dispatch(setNotificationHierarchy(hierarchy))
+      if (uid) {
+        await dispatch(savePreferencesToBackend(uid))
+        showSuccess('Prioridad actualizada')
+      }
+    } catch (error) {
+      showError('Error al actualizar prioridad')
     }
-    dispatch(setNotificationHierarchy(map[preset]))
-    if (uid) dispatch(savePreferencesToBackend(uid))
   }
 
-  const setModalities = (type: 'urgent'|'medication'|'general', enabled: boolean) => {
-    const current = prefs.notifications.hierarchy
-    const list = current.filter(x => x !== type)
-    const next = enabled ? [type, ...list] : list
-    dispatch(setNotificationHierarchy(next))
-    if (uid) dispatch(savePreferencesToBackend(uid))
-  }
-
-  const addNewModality = async () => {
-    const name = newModality.trim().toLowerCase()
-    if (!name) return
-    dispatch(addModality(name))
-    setNewModality('')
-    if (Platform.OS === 'android') {
-      try {
-        await Notifications.setNotificationChannelAsync(name, {
-          name,
-          importance: Notifications.AndroidImportance.DEFAULT,
-          sound: 'default',
-        })
-      } catch {}
+  const handleAddModality = async (name: string) => {
+    try {
+      dispatch(addModality(name))
+      
+      if (Platform.OS === 'android') {
+        try {
+          await Notifications.setNotificationChannelAsync(name, {
+            name,
+            importance: Notifications.AndroidImportance.DEFAULT,
+            sound: 'default',
+          })
+        } catch (e) {
+          console.warn('Failed to create notification channel:', e)
+        }
+      }
+      
+      if (uid) {
+        await dispatch(savePreferencesToBackend(uid))
+        showSuccess(`Modalidad "${name}" agregada`)
+      }
+    } catch (error) {
+      showError('Error al agregar modalidad')
     }
-    if (uid) dispatch(savePreferencesToBackend(uid))
   }
 
-  const removeExistingModality = async (name: string) => {
-    dispatch(removeModality(name))
-    if (uid) dispatch(savePreferencesToBackend(uid))
+  const handleRemoveModality = async (name: string) => {
+    try {
+      dispatch(removeModality(name))
+      if (uid) {
+        await dispatch(savePreferencesToBackend(uid))
+        showSuccess(`Modalidad "${name}" eliminada`)
+      }
+    } catch (error) {
+      showError('Error al eliminar modalidad')
+    }
   }
+
+  // Get custom modalities (those not in the default set)
+  const defaultModalities = ['urgent', 'medication', 'general']
+  const customModalities = prefs.notifications.hierarchy.filter(
+    m => !defaultModalities.includes(m)
+  )
 
   return (
     <SafeAreaView edges={['top','bottom']} style={styles.container}>
-      <Container style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Configuraciones</Text>
           <Text style={styles.headerSubtitle}>Personaliza tu experiencia</Text>
         </View>
 
-        <View style={styles.sectionPadding}>
-          <Card>
+        {/* Success/Error Messages */}
+        {successMessage && (
+          <View style={styles.messageContainer}>
+            <SuccessMessage
+              message={successMessage}
+              onDismiss={() => setSuccessMessage(null)}
+              autoDismiss={true}
+              duration={3000}
+            />
+          </View>
+        )}
+
+        {errorMessage && (
+          <View style={styles.messageContainer}>
+            <ErrorMessage
+              message={errorMessage}
+              onDismiss={() => setErrorMessage(null)}
+              variant="banner"
+            />
+          </View>
+        )}
+
+        {/* Profile Section */}
+        <View style={styles.section}>
+          <Card variant="elevated" padding="lg">
             <View style={styles.profileRow}>
-              <View style={{ flex: 1 }}>
+              <View style={styles.profileInfo}>
                 <Text style={styles.profileName}>{user?.name || 'Paciente'}</Text>
                 <Text style={styles.profileEmail}>{user?.email || ''}</Text>
               </View>
-              <Button variant="secondary" size="sm" onPress={() => {}}>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onPress={() => {}}
+                accessibilityLabel="Editar perfil"
+              >
                 Editar perfil
               </Button>
             </View>
           </Card>
         </View>
 
-        
+        {/* Notification Settings Section */}
+        <View style={styles.section}>
+          <NotificationSettings
+            enabled={prefs.notifications.enabled}
+            permissionStatus={notifStatus}
+            hierarchy={prefs.notifications.hierarchy}
+            customModalities={customModalities}
+            onToggleEnabled={handleToggleNotifications}
+            onUpdateHierarchy={handleUpdateHierarchy}
+            onAddModality={handleAddModality}
+            onRemoveModality={handleRemoveModality}
+            onRequestPermission={handleRequestNotifications}
+          />
+        </View>
 
-        <View style={styles.sectionPadding}>
-          <Card>
-            <Text style={styles.sectionTitle}>Notificaciones</Text>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Estado permisos</Text>
-              <Text style={styles.rowValue}>{notifStatus}</Text>
+        {/* Device Info Section */}
+        <View style={styles.section}>
+          <Card variant="elevated" padding="lg">
+            <Text style={styles.sectionTitle}>Información del dispositivo</Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Sistema operativo</Text>
+              <Text style={styles.infoValue}>{Platform.OS === 'ios' ? 'iOS' : 'Android'}</Text>
             </View>
-            <View style={styles.actionsRow}>
-              <Button variant="primary" size="sm" onPress={handleRequestNotifications} style={styles.actionButtonCompact}>Solicitar permiso</Button>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Habilitar notificaciones</Text>
-              <Switch value={prefs.notifications.enabled} onValueChange={handleToggleNotifications} />
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Prioridad</Text>
-              <Text style={styles.rowValue}>{prefs.notifications.hierarchy.join(' > ')}</Text>
-            </View>
-            <View style={styles.actionsRow}>
-              <Button variant="secondary" size="sm" onPress={() => setHierarchyPreset('default')} style={styles.actionButtonCompact}>Predeterminado</Button>
-              <Button variant="secondary" size="sm" onPress={() => setHierarchyPreset('medicationFirst')} style={styles.actionButtonCompact}>Medicación primero</Button>
-              <Button variant="secondary" size="sm" onPress={() => setHierarchyPreset('generalLast')} style={styles.actionButtonCompact}>General al final</Button>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Modalidades</Text>
-              <View style={styles.modalitiesGroup}>
-                <View style={styles.modalityItem}>
-                  <Text style={styles.modalityLabel}>Urgente</Text>
-                  <Switch value={prefs.notifications.hierarchy.includes('urgent')} onValueChange={(v) => setModalities('urgent', v)} />
-                </View>
-                <View style={styles.modalityItem}>
-                  <Text style={styles.modalityLabel}>Medicación</Text>
-                  <Switch value={prefs.notifications.hierarchy.includes('medication')} onValueChange={(v) => setModalities('medication', v)} />
-                </View>
-                <View style={styles.modalityItem}>
-                  <Text style={styles.modalityLabel}>General</Text>
-                  <Switch value={prefs.notifications.hierarchy.includes('general')} onValueChange={(v) => setModalities('general', v)} />
-                </View>
-              </View>
-            </View>
-            <View style={styles.rowColumn}>
-              <Text style={styles.rowLabel}>Agregar modalidad</Text>
-              <View style={styles.addRow}>
-                <PHTextField value={newModality} placeholder="p.ej. recordatorios" onChangeText={setNewModality} style={styles.addInput} />
-                <Button variant="primary" size="md" onPress={addNewModality}>Agregar</Button>
-              </View>
-              <View style={styles.chipsContainer}>
-                {prefs.notifications.hierarchy.map((m) => (
-                  <View key={m} style={styles.chip}>
-                    <Text style={styles.chipText}>{m}</Text>
-                    <Button variant="secondary" size="sm" onPress={() => removeExistingModality(m)} style={styles.chipButton}>✕</Button>
-                  </View>
-                ))}
-              </View>
+            <View style={styles.divider} />
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Versión de la app</Text>
+              <Text style={styles.infoValue}>{appVersion}</Text>
             </View>
           </Card>
         </View>
-
-        <View style={styles.sectionPadding}>
-          <Card>
-            <Text style={styles.sectionTitle}>Dispositivo</Text>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Sistema</Text>
-              <Text style={styles.rowValue}>{Platform.OS}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Versión app</Text>
-              <Text style={styles.rowValue}>{appVersion}</Text>
-            </View>
-          </Card>
-        </View>
-        </ScrollView>
-      </Container>
+      </ScrollView>
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F3F4F6' },
-  header: { paddingHorizontal: 16, paddingVertical: 12 },
-  scrollContent: { paddingBottom: 24 },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: '#111827' },
-  headerSubtitle: { fontSize: 14, color: '#6B7280' },
-  sectionPadding: { paddingHorizontal: 16, paddingTop: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
-  profileRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  profileName: { fontSize: 16, fontWeight: '600', color: '#111827' },
-  profileEmail: { color: '#4B5563', flexShrink: 1, flexWrap: 'wrap' },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
-  rowLabel: { fontSize: 16, color: '#111827', flex: 1, paddingRight: 8 },
-  rowValue: { color: '#4B5563', flexShrink: 1, textAlign: 'right' },
-  rowActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end' },
-  rowActionButton: { marginLeft: 8 },
-  actionsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', paddingTop: 4 },
-  actionButtonCompact: { marginLeft: 8, marginBottom: 8, paddingHorizontal: 8 },
-  modalitiesGroup: { flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap' },
-  modalityItem: { flexDirection: 'row', alignItems: 'center', marginLeft: 12 },
-  modalityLabel: { color: '#111827', marginRight: 6 },
-  rowColumn: { paddingVertical: 8 },
-  addRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  addInput: { flex: 1 },
-  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E5E7EB', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6, marginRight: 8, marginBottom: 8 },
-  chipText: { color: '#111827', marginRight: 6 },
-  chipButton: { paddingHorizontal: 8, paddingVertical: 4 },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  scrollContent: {
+    paddingBottom: spacing['3xl'],
+  },
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  headerTitle: {
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.extrabold,
+    color: colors.gray[900],
+    marginBottom: spacing.xs,
+  },
+  headerSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[600],
+  },
+  messageContainer: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  section: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  sectionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[900],
+    marginBottom: spacing.md,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  profileInfo: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  profileName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray[900],
+    marginBottom: spacing.xs,
+  },
+  profileEmail: {
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[600],
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  infoLabel: {
+    fontSize: typography.fontSize.base,
+    color: colors.gray[700],
+    fontWeight: typography.fontWeight.medium,
+  },
+  infoValue: {
+    fontSize: typography.fontSize.base,
+    color: colors.gray[600],
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.gray[200],
+    marginVertical: spacing.xs,
+  },
 })
