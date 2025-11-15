@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, FlatList, Alert, Linking, ActionSheetIOS, Platform, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, Alert, Linking, ActionSheetIOS, Platform, StyleSheet, Animated, TouchableOpacity, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'expo-router';
@@ -78,67 +78,78 @@ export default function PatientHome() {
     };
   }, [patientId, dispatch]);
 
-  useEffect(() => {
-    const initDevice = async () => {
-      try {
-        if (!patientId) return;
-        const rdb = await getRdbInstance();
-        if (!rdb) return;
-        
-        // Get all linked devices for this user
-        const snap = await rdbGet(ref(rdb, `users/${patientId}/devices`));
-        const val = snap.val() || {};
-        const deviceIds = Object.keys(val);
-        
-        if (deviceIds.length === 0) {
-          setActiveDeviceId(null);
-          return;
+  // Initialize and refresh device list
+  const initDevice = useCallback(async () => {
+    try {
+      if (!patientId) return;
+      const rdb = await getRdbInstance();
+      if (!rdb) return;
+      
+      // Get all linked devices for this user
+      const snap = await rdbGet(ref(rdb, `users/${patientId}/devices`));
+      const val = snap.val() || {};
+      const deviceIds = Object.keys(val);
+      
+      console.log('[Home] Found linked devices:', deviceIds);
+      
+      if (deviceIds.length === 0) {
+        console.log('[Home] No devices found, setting activeDeviceId to null');
+        setActiveDeviceId(null);
+        // Stop listening if we were listening to a device
+        if (deviceSlice?.listening) {
+          dispatch(stopDeviceListener());
         }
-        
-        // If only one device, use it
-        if (deviceIds.length === 1) {
-          setActiveDeviceId(deviceIds[0]);
-          if (!deviceSlice?.listening) {
-            dispatch(startDeviceListener(deviceIds[0]));
-          }
-          return;
-        }
-        
-        // If multiple devices, find the most recently active one
-        const deviceStates = await Promise.all(
-          deviceIds.map(async (id) => {
-            try {
-              const stateSnap = await rdbGet(ref(rdb, `devices/${id}/state`));
-              const state = stateSnap.val() || {};
-              return {
-                id,
-                isOnline: state.is_online || false,
-                lastSeen: state.last_seen || 0,
-              };
-            } catch {
-              return { id, isOnline: false, lastSeen: 0 };
-            }
-          })
-        );
-        
-        // Prioritize: 1) Online devices, 2) Most recently seen
-        const sortedDevices = deviceStates.sort((a, b) => {
-          if (a.isOnline && !b.isOnline) return -1;
-          if (!a.isOnline && b.isOnline) return 1;
-          return b.lastSeen - a.lastSeen;
-        });
-        
-        const selectedDevice = sortedDevices[0].id;
-        setActiveDeviceId(selectedDevice);
-        
-        if (!deviceSlice?.listening) {
-          dispatch(startDeviceListener(selectedDevice));
-        }
-      } catch (error) {
-        console.error('Error initializing device:', error);
+        return;
       }
-    };
-    
+      
+      // If only one device, use it
+      if (deviceIds.length === 1) {
+        console.log('[Home] Single device found:', deviceIds[0]);
+        setActiveDeviceId(deviceIds[0]);
+        if (!deviceSlice?.listening) {
+          dispatch(startDeviceListener(deviceIds[0]));
+        }
+        return;
+      }
+      
+      // If multiple devices, find the most recently active one
+      const deviceStates = await Promise.all(
+        deviceIds.map(async (id) => {
+          try {
+            const stateSnap = await rdbGet(ref(rdb, `devices/${id}/state`));
+            const state = stateSnap.val() || {};
+            return {
+              id,
+              isOnline: state.is_online || false,
+              lastSeen: state.last_seen || 0,
+            };
+          } catch {
+            return { id, isOnline: false, lastSeen: 0 };
+          }
+        })
+      );
+      
+      // Prioritize: 1) Online devices, 2) Most recently seen
+      const sortedDevices = deviceStates.sort((a, b) => {
+        if (a.isOnline && !b.isOnline) return -1;
+        if (!a.isOnline && b.isOnline) return 1;
+        return b.lastSeen - a.lastSeen;
+      });
+      
+      const selectedDevice = sortedDevices[0].id;
+      console.log('[Home] Selected device from multiple:', selectedDevice);
+      setActiveDeviceId(selectedDevice);
+      
+      if (!deviceSlice?.listening) {
+        dispatch(startDeviceListener(selectedDevice));
+      }
+    } catch (error) {
+      console.error('[Home] Error initializing device:', error);
+    }
+  }, [patientId, dispatch, deviceSlice?.listening]);
+
+  // Initialize device on mount
+  useEffect(() => {
     initDevice();
     
     return () => {
@@ -147,6 +158,20 @@ export default function PatientHome() {
       }
     };
   }, [patientId, dispatch]);
+
+  // Re-check devices when app comes to foreground (e.g., after linking a device)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        console.log('[Home] App became active, refreshing devices');
+        initDevice();
+      }
+    });
+    
+    return () => {
+      subscription.remove();
+    };
+  }, [initDevice]);
 
   const adherenceData = useMemo(() => {
     const todaysMeds = medications.filter(isScheduledToday);
@@ -162,20 +187,23 @@ export default function PatientHome() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // Use unique dose identifiers to prevent counting duplicates
     const uniqueTaken = new Set<string>();
     intakes.forEach((intake) => {
       const intakeDate = new Date(intake.scheduledTime);
       if (intakeDate >= today && intake.status === IntakeStatus.TAKEN) {
         const medKey = intake.medicationId || intake.medicationName;
-        const timeKey = intakeDate.toISOString();
-        uniqueTaken.add(`${medKey}-${timeKey}`);
+        // Create completion token: medicationId-scheduledTimeMs
+        const scheduledMs = intakeDate.getTime();
+        const completionToken = `${medKey}-${scheduledMs}`;
+        uniqueTaken.add(completionToken);
       }
     });
     
     console.log('[Adherence] Today meds:', todaysMeds.length);
     console.log('[Adherence] Total doses:', totalDoses);
     console.log('[Adherence] Total intakes:', intakes.length);
-    console.log('[Adherence] Taken today:', uniqueTaken.size);
+    console.log('[Adherence] Unique doses taken today:', uniqueTaken.size);
     
     return { takenCount: uniqueTaken.size, totalCount: totalDoses };
   }, [medications, intakes]);
@@ -189,23 +217,34 @@ export default function PatientHome() {
     return candidates.length ? candidates[0] : null;
   }, [medications]);
 
-  const alreadyTakenUpcoming = useMemo(() => {
-    if (!upcoming) return false;
+  const upcomingCompletionStatus = useMemo(() => {
+    if (!upcoming) return { isCompleted: false, completedAt: undefined };
     const next = upcoming.next;
     const hh = Math.floor(next);
     const mm = Math.round((next - hh) * 60);
     const scheduledDate = new Date();
     scheduledDate.setHours(hh, mm, 0, 0);
     const scheduledMs = scheduledDate.getTime();
-    return intakes.some((intake) => {
+    
+    const completedIntake = intakes.find((intake) => {
       if (intake.status !== IntakeStatus.TAKEN) return false;
       const intakeMs = new Date(intake.scheduledTime).getTime();
-      const matchesTime = intakeMs === scheduledMs;
+      const timeDiff = Math.abs(intakeMs - scheduledMs);
+      const matchesTime = timeDiff < 60000; // 1 minute tolerance
       const matchesMed = intake.medicationId
         ? intake.medicationId === upcoming.med.id
         : intake.medicationName === upcoming.med.name;
       return matchesTime && matchesMed;
     });
+    
+    if (completedIntake && completedIntake.takenAt) {
+      return {
+        isCompleted: true,
+        completedAt: new Date(completedIntake.takenAt)
+      };
+    }
+    
+    return { isCompleted: false, completedAt: undefined };
   }, [upcoming, intakes]);
 
   const handleHistory = useCallback(() => {
@@ -296,15 +335,29 @@ export default function PatientHome() {
       console.log('[TakeMedication] Patient ID:', patientId);
       
       setTakingLoading(true);
-      const db = await getDbInstance();
-      if (!db) {
-        throw new Error('Firestore no disponible');
-      }
       
       const hh = Math.floor(upcoming.next);
       const mm = Math.round((upcoming.next - hh) * 60);
       const scheduledDate = new Date();
       scheduledDate.setHours(hh, mm, 0, 0);
+      
+      // Check if dose has already been taken (duplicate prevention)
+      if (upcoming.med.id) {
+        const { canTakeDose } = await import('../../src/services/doseCompletionTracker');
+        const checkResult = await canTakeDose(upcoming.med.id, scheduledDate);
+        
+        if (!checkResult.canTake) {
+          console.log('[TakeMedication] Dose already taken:', checkResult.reason);
+          Alert.alert('Dosis ya registrada', checkResult.reason || 'Esta dosis ya fue registrada.');
+          setTakingLoading(false);
+          return;
+        }
+      }
+      
+      const db = await getDbInstance();
+      if (!db) {
+        throw new Error('Firestore no disponible');
+      }
       
       const intakeData = {
         medicationName: upcoming.med.name,
@@ -322,6 +375,39 @@ export default function PatientHome() {
       const docRef = await addDoc(collection(db, 'intakeRecords'), intakeData as any);
       
       console.log('[TakeMedication] Successfully written with ID:', docRef.id);
+      
+      // Decrement inventory if tracking is enabled
+      if (upcoming.med.id && upcoming.med.trackInventory) {
+        try {
+          const { inventoryService } = await import('../../src/services/inventoryService');
+          const doseAmount = inventoryService.parseDoseAmount(upcoming.med);
+          
+          console.log('[TakeMedication] Decrementing inventory:', {
+            medicationId: upcoming.med.id,
+            doseAmount,
+          });
+          
+          await inventoryService.decrementInventory(upcoming.med.id, doseAmount);
+          
+          // Check if inventory is now low
+          const isLow = await inventoryService.checkLowQuantity(upcoming.med.id);
+          
+          if (isLow) {
+            const status = await inventoryService.getInventoryStatus(upcoming.med.id);
+            console.log('[TakeMedication] Low inventory detected:', status);
+            
+            // Show low inventory warning
+            Alert.alert(
+              'Inventario bajo',
+              `Quedan ${status.currentQuantity} dosis de ${upcoming.med.name}. Considera reabastecer pronto.`,
+              [{ text: 'Entendido' }]
+            );
+          }
+        } catch (inventoryError) {
+          // Log error but don't block the dose recording
+          console.error('[TakeMedication] Error updating inventory:', inventoryError);
+        }
+      }
       
       Alert.alert('Registrado', 'Se registró la toma de la dosis.');
     } catch (e: any) {
@@ -517,6 +603,8 @@ export default function PatientHome() {
                     scheduledTime={formatHourDecimal(upcoming.next)}
                     onTakeMedication={handleTakeUpcomingMedication}
                     loading={takingLoading}
+                    isCompleted={upcomingCompletionStatus.isCompleted}
+                    completedAt={upcomingCompletionStatus.completedAt}
                   />
                 </View>
               )}

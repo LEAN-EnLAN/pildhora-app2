@@ -47,6 +47,57 @@ export function useDebounce<T>(value: T, delay: number = 300): T {
 }
 
 /**
+ * Custom hook for debouncing callback functions
+ * Useful for validation checks, search queries, or other operations that should wait for user input to settle
+ * 
+ * @param callback - The function to debounce
+ * @param delay - Delay in milliseconds (default: 300ms)
+ * @returns The debounced function
+ * 
+ * @example
+ * const validateInput = useDebouncedCallback((value: string) => {
+ *   // Expensive validation logic
+ *   performValidation(value);
+ * }, 300);
+ * 
+ * <TextInput onChangeText={validateInput} />
+ */
+export function useDebouncedCallback<T extends (...args: any[]) => any>(
+  callback: T,
+  delay: number = 300
+): T {
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const callbackRef = useRef(callback);
+
+  // Update callback ref when callback changes
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  return useCallback(
+    ((...args: Parameters<T>) => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+
+      timeoutRef.current = setTimeout(() => {
+        callbackRef.current(...args);
+      }, delay);
+    }) as T,
+    [delay]
+  );
+}
+
+/**
  * Custom hook for throttling function calls
  * Useful for scroll handlers, resize handlers, or other high-frequency events
  * 

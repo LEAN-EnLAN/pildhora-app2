@@ -13,10 +13,14 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
   style,
 }) => {
   const [contentHeight, setContentHeight] = useState(0);
+  const [isMeasured, setIsMeasured] = useState(false);
   const animatedHeight = useRef(new Animated.Value(0)).current;
   const animatedOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Only animate after we've measured the content
+    if (!isMeasured || contentHeight === 0) return;
+
     if (collapsed) {
       // Collapse animation
       Animated.parallel([
@@ -28,7 +32,7 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
         Animated.timing(animatedOpacity, {
           toValue: 0,
           duration: 200,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]).start();
     } else {
@@ -43,17 +47,22 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
           toValue: 1,
           duration: 250,
           delay: 50,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]).start();
     }
-  }, [collapsed, contentHeight]);
+  }, [collapsed, contentHeight, isMeasured]);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const { height } = event.nativeEvent.layout;
-    if (height > 0 && contentHeight === 0) {
+    if (height > 0 && !isMeasured) {
       setContentHeight(height);
-      if (!collapsed) {
+      setIsMeasured(true);
+      // Set initial state based on collapsed prop
+      if (collapsed) {
+        animatedHeight.setValue(0);
+        animatedOpacity.setValue(0);
+      } else {
         animatedHeight.setValue(height);
         animatedOpacity.setValue(1);
       }
@@ -65,13 +74,19 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
       style={[
         style,
         {
-          height: animatedHeight,
-          opacity: animatedOpacity,
+          height: isMeasured ? animatedHeight : 'auto',
+          opacity: isMeasured ? animatedOpacity : (collapsed ? 0 : 1),
           overflow: 'hidden',
         },
       ]}
     >
-      <View onLayout={handleLayout}>{children}</View>
+      <View 
+        onLayout={handleLayout}
+        style={!isMeasured ? { position: 'absolute', opacity: 0 } : undefined}
+      >
+        {children}
+      </View>
+      {isMeasured && <View>{children}</View>}
     </Animated.View>
   );
 };

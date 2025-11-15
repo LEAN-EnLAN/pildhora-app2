@@ -9,6 +9,7 @@ export { Chip } from './Chip';
 export { LoadingSpinner } from './LoadingSpinner';
 export { ErrorMessage } from './ErrorMessage';
 export { SuccessMessage } from './SuccessMessage';
+export { SkeletonLoader, MedicationCardSkeleton, EventCardSkeleton, ListSkeleton } from './SkeletonLoader';
 
 // Animation components
 export { AnimatedListItem } from './AnimatedListItem';

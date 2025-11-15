@@ -104,6 +104,13 @@ export default function CaregiverLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="receipt-outline" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="events"
+        options={{
+          title: 'Eventos',
+          tabBarIcon: ({ color, size }) => <Ionicons name="notifications-outline" size={size} color={color} />,
+        }}
+      />
       {/* This screen is not in the tab bar and will be pushed as a modal */}
       <Tabs.Screen name="chat" options={{ href: null }} />
       <Tabs.Screen name="add-device" options={{ href: null, title: 'Vincular Dispositivo' }} />

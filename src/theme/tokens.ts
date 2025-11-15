@@ -21,8 +21,15 @@ export const colors = {
   
   // Semantic colors
   success: '#34C759',
-  warning: '#FF9500',
-  error: '#FF3B30',
+  warning: {
+    50: '#FFF7ED',
+    200: '#FED7AA',
+    500: '#FF9500',
+  },
+  error: {
+    50: '#FEF2F2',
+    500: '#FF3B30',
+  },
   info: '#5856D6',
   
   // Neutral palette

@@ -3,7 +3,6 @@ import { Task, ApiResponse, User } from '../../types';
 import { getDbInstance, waitForFirebaseInitialization } from '../../services/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where, orderBy, getDoc } from 'firebase/firestore';
 import { convertTimestamps } from '../../utils/firestoreUtils';
-import { getAuth } from 'firebase/auth';
 
 interface TasksState {
   tasks: Task[];
@@ -24,11 +23,7 @@ export const fetchTasks = createAsyncThunk(
     try {
       // Wait for Firebase to initialize
       await waitForFirebaseInitialization();
-      
-      // Get the current authenticated user
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
-      
+
       // Get the user data from Redux state to validate permissions
       const state = getState() as { auth: { user: User | null } };
       const user = state.auth.user;

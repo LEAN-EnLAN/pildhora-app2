@@ -15,7 +15,7 @@ export const AnimatedListItem: React.FC<AnimatedListItemProps> = ({
   delay = 50,
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  const slideAnim = useRef(new Animated.Value(-20)).current;
 
   useEffect(() => {
     // Stagger animation based on index

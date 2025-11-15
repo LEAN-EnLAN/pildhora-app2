@@ -14,10 +14,12 @@ import * as Notifications from 'expo-notifications'
 import Constants from 'expo-constants'
 import { ensurePushTokensRegistered } from '../../src/services/notifications/push'
 import { colors, spacing, typography } from '../../src/theme/tokens'
+import { useRouter } from 'expo-router'
  
 
 export default function PatientSettings() {
   const dispatch = useDispatch<AppDispatch>()
+  const router = useRouter()
   const { user } = useSelector((s: RootState) => s.auth)
   const prefs = useSelector((s: RootState) => s.preferences)
   const uid = user?.id || ''
@@ -178,7 +180,7 @@ export default function PatientSettings() {
               <Button 
                 variant="secondary" 
                 size="sm" 
-                onPress={() => {}}
+                onPress={() => router.push('/patient/edit-profile')}
                 accessibilityLabel="Editar perfil"
               >
                 Editar perfil

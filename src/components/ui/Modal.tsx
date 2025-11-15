@@ -10,6 +10,7 @@ import {
   TouchableWithoutFeedback,
   ViewStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme/tokens';
 
 interface ModalProps {
@@ -37,6 +38,7 @@ export const Modal: React.FC<ModalProps> = ({
   closeOnOverlayPress = true,
   contentStyle,
 }) => {
+  const insets = useSafeAreaInsets();
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
@@ -158,7 +160,9 @@ export const Modal: React.FC<ModalProps> = ({
             </View>
           )}
 
-          <View style={styles.body}>{children}</View>
+          <View style={[styles.body, { paddingBottom: spacing.lg + insets.bottom }]}>
+            {children}
+          </View>
         </Animated.View>
       </View>
     </RNModal>

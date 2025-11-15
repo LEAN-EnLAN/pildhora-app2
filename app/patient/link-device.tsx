@@ -8,7 +8,7 @@ import { getDbInstance, getRdbInstance, getAuthInstance } from '../../src/servic
 import { ref, get, push, set } from 'firebase/database';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
-import { Button, Input, Card, LoadingSpinner, ErrorMessage, SuccessMessage, AnimatedListItem, Collapsible } from '../../src/components/ui';
+import { Button, Input, Card, LoadingSpinner, ErrorMessage, SuccessMessage, AnimatedListItem, Collapsible, Modal } from '../../src/components/ui';
 import { DeviceConfigPanel } from '../../src/components/shared/DeviceConfigPanel';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 
@@ -150,6 +150,7 @@ export default function LinkDeviceScreen() {
   const [expandedDevices, setExpandedDevices] = useState<Set<string>>(new Set());
   const [loadingDevices, setLoadingDevices] = useState(false);
   const [diagnosticStatus, setDiagnosticStatus] = useState<string | null>(null);
+  const [dispenseFeedback, setDispenseFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   async function refreshLinkedDevices() {
     if (!userId) return;
@@ -248,6 +249,28 @@ export default function LinkDeviceScreen() {
     // Check development rule status on component mount
     checkDevelopmentRuleStatus().catch(console.error);
   }, [userId]);
+
+  useEffect(() => {
+    if (successMessage === 'Solicitud de dispensaci��n enviada') {
+      setDispenseFeedback({
+        type: 'success',
+        message: 'Solicitud de dispensaci��n enviada',
+      });
+      setSuccessMessage(null);
+    }
+  }, [successMessage]);
+
+  useEffect(() => {
+    if (!error) return;
+
+    if (error.startsWith('No se puede dispensar') || error === 'No se pudo dispensar') {
+      setDispenseFeedback({
+        type: 'error',
+        message: error,
+      });
+      setError(null);
+    }
+  }, [error]);
 
   const handleLink = async () => {
     console.log('[DEBUG] handleLink called');

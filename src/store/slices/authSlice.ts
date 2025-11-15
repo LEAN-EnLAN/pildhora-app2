@@ -24,6 +24,56 @@ const initialState: AuthState = {
   isAuthenticated: false,
 };
 
+// Async thunk to update non-sensitive profile fields (e.g., display name)
+// This intentionally avoids changing authentication credentials like email/password.
+export const updateProfile = createAsyncThunk(
+  'auth/updateProfile',
+  async (
+    { name }: { name: string },
+    { rejectWithValue, getState }
+  ) => {
+    try {
+      const auth = await getAuthInstance();
+      const db = await getDbInstance();
+
+      if (!auth || !db) {
+        throw new Error('Firebase services not initialized');
+      }
+
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('No authenticated user');
+      }
+
+      const state = getState() as { auth: AuthState };
+      const existingUser = state.auth.user;
+
+      const userId = currentUser.uid;
+
+      // Persist only safe profile fields to Firestore
+      await setDoc(
+        doc(db, 'users', userId),
+        { name },
+        { merge: true }
+      );
+
+      const updatedUser: User = existingUser
+        ? { ...existingUser, name }
+        : {
+            id: userId,
+            email: currentUser.email || '',
+            name,
+            role: 'patient',
+            createdAt: new Date(),
+          };
+
+      return updatedUser;
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Failed to update profile');
+    }
+  }
+);
+
 // Async thunks
 export const signUp = createAsyncThunk(
   'auth/signUp',
@@ -307,6 +357,19 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
         state.initializing = false;
+      })
+      .addCase(updateProfile.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload;
+        state.isAuthenticated = true;
+      })
+      .addCase(updateProfile.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
       });
   },
 });

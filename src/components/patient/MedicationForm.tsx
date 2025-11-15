@@ -12,6 +12,9 @@ import ReminderTimePicker from './medication-form/ReminderTimePicker';
 import ReminderDaysSelector from './medication-form/ReminderDaysSelector';
 import { Button, Card, Container, Modal } from '../ui';
 import { colors, spacing, typography } from '../../theme/tokens';
+import { LowQuantityBanner } from '../screens/patient/LowQuantityBanner';
+import { RefillDialog } from '../screens/patient/RefillDialog';
+import { inventoryService } from '../../services/inventoryService';
 
 type Mode = 'add' | 'edit';
 
@@ -58,6 +61,13 @@ export default function MedicationForm({ mode, medication, onDelete, patientIdOv
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showRefillDialog, setShowRefillDialog] = useState(false);
+  const [inventoryStatus, setInventoryStatus] = useState<{
+    currentQuantity: number;
+    isLow: boolean;
+    daysRemaining: number;
+    estimatedRunOutDate: Date;
+  } | null>(null);
 
   // Migration function for backward compatibility
   const migrateMedicationData = (medication: any): FormState => {
@@ -109,6 +119,22 @@ export default function MedicationForm({ mode, medication, onDelete, patientIdOv
       setForm(migrateMedicationData(medication));
     }
   }, [mode, medication?.id]);
+
+  // Load inventory status when editing
+  useEffect(() => {
+    const loadInventoryStatus = async () => {
+      if (mode === 'edit' && medication?.id && medication.trackInventory) {
+        try {
+          const status = await inventoryService.getInventoryStatus(medication.id);
+          setInventoryStatus(status);
+        } catch (error) {
+          console.error('[MedicationForm] Error loading inventory status:', error);
+        }
+      }
+    };
+
+    loadInventoryStatus();
+  }, [mode, medication?.id, medication?.trackInventory]);
 
   // Validation function
   const validateForm = (): boolean => {
@@ -182,6 +208,8 @@ export default function MedicationForm({ mode, medication, onDelete, patientIdOv
         caregiverId,
         // Keep legacy dosage field for backward compatibility
         dosage: `${form.doseValue}${form.doseUnit}, ${form.quantityTypes[0]}`,
+        // Inventory tracking - default to false for new medications
+        trackInventory: medication?.trackInventory || false,
       };
 
       if (mode === 'add') {
@@ -227,10 +255,44 @@ export default function MedicationForm({ mode, medication, onDelete, patientIdOv
     router.back();
   };
 
+  const handleRefillConfirm = async (newQuantity: number) => {
+    if (!medication?.id) return;
+
+    try {
+      await inventoryService.refillInventory(medication.id, newQuantity);
+      
+      // Reload inventory status
+      const status = await inventoryService.getInventoryStatus(medication.id);
+      setInventoryStatus(status);
+      
+      setShowRefillDialog(false);
+    } catch (error) {
+      console.error('[MedicationForm] Error refilling inventory:', error);
+      throw error;
+    }
+  };
+
+  const handleRefillCancel = () => {
+    setShowRefillDialog(false);
+  };
+
   return (
     <Container>
       <ScrollView>
         <Card>
+          {/* Low Quantity Banner - Only show in edit mode with inventory tracking */}
+          {mode === 'edit' && 
+           medication?.trackInventory && 
+           inventoryStatus?.isLow && 
+           medication.lowQuantityThreshold !== undefined && (
+            <LowQuantityBanner
+              currentQuantity={inventoryStatus.currentQuantity}
+              threshold={medication.lowQuantityThreshold}
+              daysRemaining={inventoryStatus.daysRemaining}
+              onRefill={() => setShowRefillDialog(true)}
+            />
+          )}
+
           {/* Medication Name */}
           <MedicationNameInput
             value={form.name}
@@ -332,6 +394,16 @@ export default function MedicationForm({ mode, medication, onDelete, patientIdOv
           </View>
         </View>
       </Modal>
+
+      {/* Refill Dialog */}
+      {medication && (
+        <RefillDialog
+          visible={showRefillDialog}
+          medication={medication}
+          onConfirm={handleRefillConfirm}
+          onCancel={handleRefillCancel}
+        />
+      )}
     </Container>
   );
 }

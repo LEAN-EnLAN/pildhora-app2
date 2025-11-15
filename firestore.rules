@@ -1,9 +1,150 @@
-rules_version='2'
+rules_version = '2'
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function getUser(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function userRole() {
+      return isSignedIn() ? getUser(request.auth.uid).data.role : null;
+    }
+
+    function isCaregiver() {
+      return userRole() == "caregiver";
+    }
+
+    // users collection: allow users to read/write their own document.
+    // Caregivers can read any user (needed to see patient info), but only write their own.
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isSelf(uid);
+    }
+
+    // notificationPreferences/{userId}: only that user can read/write.
+    match /notificationPreferences/{userId} {
+      allow read, write: if isSelf(userId);
+    }
+
+    // tasks: caregiver-owned tasks (caregiverId field).
+    match /tasks/{taskId} {
+      allow read, write: if isSignedIn() && request.resource.data.caregiverId == request.auth.uid;
+    }
+
+    // medications: documents contain patientId and caregiverId.
+    // Allow read/write for the patient or caregiver associated with the medication.
+    match /medications/{medicationId} {
+      allow read, write: if isSignedIn() &&
+        (
+          (request.auth.uid == resource.data.patientId) ||
+          (request.auth.uid == resource.data.caregiverId) ||
+          (request.auth.uid == request.resource.data.patientId) ||
+          (request.auth.uid == request.resource.data.caregiverId)
+        );
+    }
+
+    // intakeRecords: documents contain patientId.
+    // Allow patient to read/write their own records.
+    // Caregivers may read/update but not delete; this can be refined later to only linked caregivers.
+    match /intakeRecords/{intakeId} {
+      allow read, create, update: if isSignedIn() &&
+        (
+          request.auth.uid == resource.data.patientId ||
+          request.auth.uid == request.resource.data.patientId ||
+          isCaregiver()
+        );
+      allow delete: if isSignedIn() &&
+        (
+          request.auth.uid == resource.data.patientId ||
+          request.auth.uid == request.resource.data.patientId
+        );
+    }
+
+    // devices collection: documents include linkedUsers map and primaryPatientId.
+    // Allow read/write for users listed in linkedUsers; other access is blocked.
+    match /devices/{deviceId} {
+      allow read, write: if isSignedIn() &&
+        (request.auth.uid in (resource.data.linkedUsers.keys() || []) ||
+         request.auth.uid in (request.resource.data.linkedUsers.keys() || []));
+    }
+
+    // deviceLinks: relationships between devices and users.
+    // Allow users to read links where they are involved; writes are typically done by Cloud Functions.
+    match /deviceLinks/{linkId} {
+      allow read: if isSignedIn() &&
+        (request.auth.uid == resource.data.userId || request.auth.uid == request.resource.data.userId);
+      // Writes are expected to come from privileged backend; allow basic creation by the user if needed.
+      allow write: if isSignedIn() &&
+        (request.auth.uid == request.resource.data.userId);
+    }
+
+    // deviceConfigs: configuration per device. Only users linked to the device may read/write.
+    match /deviceConfigs/{deviceId} {
+      allow read, write: if isSignedIn() &&
+        (
+          // Look up the device document and ensure the user is in linkedUsers.
+          (request.auth.uid in (get(/databases/$(database)/documents/devices/$(deviceId)).data.linkedUsers.keys() || []))
+        );
+    }
+
+    // medicationEvents: events generated when patients create/update/delete medications.
+    // Only the assigned caregiver can read events; only authenticated patients can write events.
+    match /medicationEvents/{eventId} {
+      // Helper function to check if the request is within rate limit
+      // Note: This is a simplified check. For production, consider using Cloud Functions
+      // to enforce rate limiting more accurately, as Firestore rules have query limitations.
+      function isWithinRateLimit() {
+        // Rate limiting in security rules is limited due to query constraints.
+        // This function serves as a placeholder for the rate limit logic.
+        // Actual enforcement should be done via Cloud Functions or client-side throttling.
+        // For now, we allow the operation and rely on monitoring.
+        return true;
+      }
+
+      // Helper function to validate event data structure
+      function isValidEventData() {
+        let data = request.resource.data;
+        return data.keys().hasAll(['eventType', 'medicationId', 'medicationName', 'patientId', 'caregiverId', 'timestamp', 'syncStatus']) &&
+               data.eventType in ['created', 'updated', 'deleted'] &&
+               data.medicationId is string &&
+               data.medicationName is string &&
+               data.patientId is string &&
+               data.caregiverId is string &&
+               data.timestamp is timestamp &&
+               data.syncStatus in ['pending', 'delivered', 'failed'] &&
+               // Ensure patientId matches authenticated user
+               data.patientId == request.auth.uid &&
+               // Validate optional fields
+               (!data.keys().hasAny(['medicationData']) || data.medicationData is map) &&
+               (!data.keys().hasAny(['changes']) || data.changes is list);
+      }
+
+      // Read access: only the assigned caregiver can read events
+      allow read: if isSignedIn() && 
+        request.auth.uid == resource.data.caregiverId;
+
+      // Write access: only authenticated patients can create events
+      allow create: if isSignedIn() && 
+        isValidEventData() &&
+        isWithinRateLimit();
+
+      // Update and delete: only the patient who created the event can update/delete
+      allow update, delete: if isSignedIn() && 
+        request.auth.uid == resource.data.patientId;
+    }
+
+    // fallback: deny everything else by default
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

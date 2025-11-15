@@ -9,11 +9,15 @@ import { Medication } from '../../../types';
 interface MedicationCardProps {
   medication: Medication;
   onPress: () => void;
+  showLowQuantityBadge?: boolean;
+  currentQuantity?: number;
 }
 
 export const MedicationCard: React.FC<MedicationCardProps> = React.memo(({
   medication,
   onPress,
+  showLowQuantityBadge = false,
+  currentQuantity,
 }) => {
   /**
    * Formats 24-hour time string to 12-hour format with AM/PM
@@ -69,9 +73,33 @@ export const MedicationCard: React.FC<MedicationCardProps> = React.memo(({
           <Ionicons name="medkit-outline" size={24} color={colors.primary[500]} />
         </View>
         <View style={styles.medicationInfo}>
-          <Text style={styles.medicationName} numberOfLines={1}>
-            {medication.name}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.medicationName} numberOfLines={1}>
+              {medication.name}
+            </Text>
+            {showLowQuantityBadge && (
+              <View 
+                style={[
+                  styles.lowQuantityBadge,
+                  currentQuantity === 0 && styles.outOfStockBadge
+                ]}
+                accessibilityLabel={
+                  currentQuantity === 0 
+                    ? 'Medicamento agotado' 
+                    : `Inventario bajo: ${currentQuantity} dosis restantes`
+                }
+              >
+                <Ionicons 
+                  name={currentQuantity === 0 ? "alert-circle" : "warning"} 
+                  size={12} 
+                  color="#FFFFFF" 
+                />
+                <Text style={styles.badgeText}>
+                  {currentQuantity === 0 ? 'Agotado' : 'Bajo'}
+                </Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.dosage} numberOfLines={1}>
             {getDosageText()}
           </Text>
@@ -122,11 +150,34 @@ const styles = StyleSheet.create({
   medicationInfo: {
     flex: 1,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
   medicationName: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
     color: colors.gray[900],
-    marginBottom: spacing.xs,
+    flex: 1,
+  },
+  lowQuantityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.warning[500],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    gap: spacing.xs,
+  },
+  outOfStockBadge: {
+    backgroundColor: colors.error[500],
+  },
+  badgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: '#FFFFFF',
   },
   dosage: {
     fontSize: typography.fontSize.base,

@@ -25,9 +25,20 @@ export interface Medication {
   caregiverId: string;
   createdAt: Date | string; // Can be Date object or ISO string after Firestore conversion
   updatedAt: Date | string; // Can be Date object or ISO string after Firestore conversion
+  
+  // Wizard redesign fields
+  emoji?: string; // Emoji icon for visual identification
+  nativeAlarmIds?: string[]; // Platform-specific alarm identifiers
+  
+  // Inventory tracking fields
+  trackInventory: boolean;
+  currentQuantity?: number;
+  initialQuantity?: number;
+  lowQuantityThreshold?: number;
+  lastRefillDate?: Date | string;
 }
 
-// Dose units enumeration
+// Dose units enumeration with Spanish labels
 export const DOSE_UNITS = [
   { id: 'mg', label: 'mg (miligramos)' },
   { id: 'g', label: 'g (gramos)' },
@@ -38,20 +49,30 @@ export const DOSE_UNITS = [
   { id: 'drops', label: 'gotas' },
   { id: 'sprays', label: 'sprays' },
   { id: 'puffs', label: 'inhalaciones' },
+  { id: 'inhalations', label: 'inhalaciones' },
+  { id: 'applications', label: 'aplicaciones' },
   { id: 'custom', label: 'Unidad personalizada' }
 ] as const;
 
-// Quantity types enumeration
+// Type definitions for dose units
+export type DoseUnitId = typeof DOSE_UNITS[number]['id'];
+export type DoseUnit = typeof DOSE_UNITS[number];
+
+// Quantity types enumeration with Spanish labels
 export const QUANTITY_TYPES = [
-  { id: 'tablets', label: 'Tablets', icon: 'medkit-outline' },
-  { id: 'capsules', label: 'Capsules', icon: 'medkit-outline' },
-  { id: 'liquid', label: 'Liquid', icon: 'flask-outline' },
-  { id: 'cream', label: 'Cream', icon: 'color-wand-outline' },
-  { id: 'inhaler', label: 'Inhaler', icon: 'wind-outline' },
-  { id: 'drops', label: 'Drops', icon: 'water-outline' },
+  { id: 'tablets', label: 'Tabletas', icon: 'medkit-outline' },
+  { id: 'capsules', label: 'Cápsulas', icon: 'medkit-outline' },
+  { id: 'liquid', label: 'Líquido', icon: 'flask-outline' },
+  { id: 'cream', label: 'Crema', icon: 'color-wand-outline' },
+  { id: 'inhaler', label: 'Inhalador', icon: 'wind-outline' },
+  { id: 'drops', label: 'Gotas', icon: 'water-outline' },
   { id: 'spray', label: 'Spray', icon: 'snow-outline' },
-  { id: 'other', label: 'Other', icon: 'help-circle-outline' }
+  { id: 'other', label: 'Otro', icon: 'help-circle-outline' }
 ] as const;
+
+// Type definitions for quantity types
+export type QuantityTypeId = typeof QUANTITY_TYPES[number]['id'];
+export type QuantityType = typeof QUANTITY_TYPES[number];
 
 // Task types
 export interface Task {
@@ -111,6 +132,10 @@ export interface IntakeRecord {
   takenAt?: Date | string; // Can be Date object or ISO string after Firestore conversion
   // Optional linkage to the medication document for enrichment
   medicationId?: string;
+  // New fields for duplicate prevention and device tracking
+  completionToken?: string; // Unique token: `${medicationId}-${scheduledTime.getTime()}`
+  deviceSource?: 'manual' | 'pillbox'; // Source of intake recording
+  caregiverId?: string; // Caregiver ID for scoping
 }
 
 // API response types
@@ -188,3 +213,30 @@ export interface NotificationPreferences {
   customModalities: string[];
   lastUpdated: Date | string;
 }
+
+// Medication event types for caregiver notification system
+export type MedicationEventType = 'created' | 'updated' | 'deleted';
+export type EventSyncStatus = 'pending' | 'delivered' | 'failed';
+
+export interface MedicationEventChange {
+  field: string;
+  oldValue: any;
+  newValue: any;
+}
+
+export interface MedicationEvent {
+  id: string;
+  eventType: MedicationEventType;
+  medicationId: string;
+  medicationName: string;
+  medicationData: Partial<Medication>; // Snapshot of medication data
+  patientId: string;
+  patientName: string;
+  caregiverId: string;
+  timestamp: Date | string; // Can be Date object or ISO string after Firestore conversion
+  syncStatus: EventSyncStatus;
+  changes?: MedicationEventChange[]; // For update events, track what changed
+}
+
+// External module declarations
+// (No external module declarations needed at this time)

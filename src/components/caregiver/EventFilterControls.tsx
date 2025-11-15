@@ -1,0 +1,575 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+  ScrollView,
+  TextInput,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Button } from '../ui/Button';
+import { colors, spacing, typography, borderRadius } from '../../theme/tokens';
+import { MedicationEventType } from '../../types';
+
+export interface EventFilters {
+  patientId?: string;
+  eventType?: MedicationEventType;
+  dateRange?: {
+    start: Date;
+    end: Date;
+  };
+  searchQuery?: string;
+}
+
+interface EventFilterControlsProps {
+  filters: EventFilters;
+  onFiltersChange: (filters: EventFilters) => void;
+  patients: Array<{ id: string; name: string }>;
+}
+
+export const EventFilterControls: React.FC<EventFilterControlsProps> = ({
+  filters,
+  onFiltersChange,
+  patients,
+}) => {
+  const [showPatientModal, setShowPatientModal] = useState(false);
+  const [showEventTypeModal, setShowEventTypeModal] = useState(false);
+  const [showDateRangeModal, setShowDateRangeModal] = useState(false);
+
+  const hasActiveFilters = !!(
+    filters.patientId ||
+    filters.eventType ||
+    filters.dateRange ||
+    filters.searchQuery
+  );
+
+  const getPatientName = (patientId?: string) => {
+    if (!patientId) return 'Todos los pacientes';
+    const patient = patients.find(p => p.id === patientId);
+    return patient?.name || 'Paciente desconocido';
+  };
+
+  const getEventTypeLabel = (eventType?: MedicationEventType) => {
+    if (!eventType) return 'Todos los eventos';
+    switch (eventType) {
+      case 'created':
+        return 'Creados';
+      case 'updated':
+        return 'Actualizados';
+      case 'deleted':
+        return 'Eliminados';
+      default:
+        return 'Todos los eventos';
+    }
+  };
+
+  const getDateRangeLabel = (dateRange?: { start: Date; end: Date }) => {
+    if (!dateRange) return 'Todo el tiempo';
+    const start = dateRange.start.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
+    const end = dateRange.end.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
+    return `${start} - ${end}`;
+  };
+
+  const handleClearFilters = () => {
+    onFiltersChange({});
+  };
+
+  const handlePatientSelect = (patientId?: string) => {
+    onFiltersChange({ ...filters, patientId });
+    setShowPatientModal(false);
+  };
+
+  const handleEventTypeSelect = (eventType?: MedicationEventType) => {
+    onFiltersChange({ ...filters, eventType });
+    setShowEventTypeModal(false);
+  };
+
+  const handleSearchChange = (text: string) => {
+    onFiltersChange({ ...filters, searchQuery: text || undefined });
+  };
+
+  const handleDateRangeSelect = (preset: string) => {
+    const now = new Date();
+    let start: Date;
+    let end: Date = now;
+
+    switch (preset) {
+      case 'today':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case 'week':
+        start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case 'all':
+        onFiltersChange({ ...filters, dateRange: undefined });
+        setShowDateRangeModal(false);
+        return;
+      default:
+        return;
+    }
+
+    onFiltersChange({ ...filters, dateRange: { start, end } });
+    setShowDateRangeModal(false);
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Search bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color={colors.gray[400]} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Buscar por medicamento..."
+          placeholderTextColor={colors.gray[400]}
+          value={filters.searchQuery || ''}
+          onChangeText={handleSearchChange}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {filters.searchQuery && (
+          <TouchableOpacity
+            onPress={() => handleSearchChange('')}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close-circle" size={20} color={colors.gray[400]} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Filter chips */}
+      <View style={styles.filtersRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersContent}
+        >
+          {/* Patient filter */}
+          <TouchableOpacity
+            style={[styles.filterChip, filters.patientId && styles.filterChipActive]}
+            onPress={() => setShowPatientModal(true)}
+          >
+            <Ionicons
+              name="person-outline"
+              size={16}
+              color={filters.patientId ? colors.primary[500] : colors.gray[600]}
+            />
+            <Text
+              style={[styles.filterChipText, filters.patientId && styles.filterChipTextActive]}
+            >
+              {getPatientName(filters.patientId)}
+            </Text>
+            <Ionicons
+              name="chevron-down"
+              size={16}
+              color={filters.patientId ? colors.primary[500] : colors.gray[600]}
+            />
+          </TouchableOpacity>
+
+          {/* Event type filter */}
+          <TouchableOpacity
+            style={[styles.filterChip, filters.eventType && styles.filterChipActive]}
+            onPress={() => setShowEventTypeModal(true)}
+          >
+            <Ionicons
+              name="list-outline"
+              size={16}
+              color={filters.eventType ? colors.primary[500] : colors.gray[600]}
+            />
+            <Text
+              style={[styles.filterChipText, filters.eventType && styles.filterChipTextActive]}
+            >
+              {getEventTypeLabel(filters.eventType)}
+            </Text>
+            <Ionicons
+              name="chevron-down"
+              size={16}
+              color={filters.eventType ? colors.primary[500] : colors.gray[600]}
+            />
+          </TouchableOpacity>
+
+          {/* Date range filter */}
+          <TouchableOpacity
+            style={[styles.filterChip, filters.dateRange && styles.filterChipActive]}
+            onPress={() => setShowDateRangeModal(true)}
+          >
+            <Ionicons
+              name="calendar-outline"
+              size={16}
+              color={filters.dateRange ? colors.primary[500] : colors.gray[600]}
+            />
+            <Text
+              style={[styles.filterChipText, filters.dateRange && styles.filterChipTextActive]}
+            >
+              {getDateRangeLabel(filters.dateRange)}
+            </Text>
+            <Ionicons
+              name="chevron-down"
+              size={16}
+              color={filters.dateRange ? colors.primary[500] : colors.gray[600]}
+            />
+          </TouchableOpacity>
+
+          {/* Clear filters button */}
+          {hasActiveFilters && (
+            <TouchableOpacity style={styles.clearButton} onPress={handleClearFilters}>
+              <Ionicons name="close-circle" size={16} color={colors.error[500]} />
+              <Text style={styles.clearButtonText}>Limpiar</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </View>
+
+      {/* Patient selection modal */}
+      <Modal
+        visible={showPatientModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPatientModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowPatientModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Filtrar por paciente</Text>
+            <ScrollView style={styles.modalList}>
+              <TouchableOpacity
+                style={[
+                  styles.modalOption,
+                  !filters.patientId && styles.modalOptionActive,
+                ]}
+                onPress={() => handlePatientSelect(undefined)}
+              >
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    !filters.patientId && styles.modalOptionTextActive,
+                  ]}
+                >
+                  Todos los pacientes
+                </Text>
+                {!filters.patientId && (
+                  <Ionicons name="checkmark" size={20} color={colors.primary[500]} />
+                )}
+              </TouchableOpacity>
+              {patients.map(patient => (
+                <TouchableOpacity
+                  key={patient.id}
+                  style={[
+                    styles.modalOption,
+                    filters.patientId === patient.id && styles.modalOptionActive,
+                  ]}
+                  onPress={() => handlePatientSelect(patient.id)}
+                >
+                  <Text
+                    style={[
+                      styles.modalOptionText,
+                      filters.patientId === patient.id && styles.modalOptionTextActive,
+                    ]}
+                  >
+                    {patient.name}
+                  </Text>
+                  {filters.patientId === patient.id && (
+                    <Ionicons name="checkmark" size={20} color={colors.primary[500]} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <Button
+              onPress={() => setShowPatientModal(false)}
+              variant="secondary"
+            >
+              Cerrar
+            </Button>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Event type selection modal */}
+      <Modal
+        visible={showEventTypeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEventTypeModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowEventTypeModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Filtrar por tipo de evento</Text>
+            <ScrollView style={styles.modalList}>
+              <TouchableOpacity
+                style={[
+                  styles.modalOption,
+                  !filters.eventType && styles.modalOptionActive,
+                ]}
+                onPress={() => handleEventTypeSelect(undefined)}
+              >
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    !filters.eventType && styles.modalOptionTextActive,
+                  ]}
+                >
+                  Todos los eventos
+                </Text>
+                {!filters.eventType && (
+                  <Ionicons name="checkmark" size={20} color={colors.primary[500]} />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalOption,
+                  filters.eventType === 'created' && styles.modalOptionActive,
+                ]}
+                onPress={() => handleEventTypeSelect('created')}
+              >
+                <Ionicons name="add-circle" size={20} color={colors.success} />
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    filters.eventType === 'created' && styles.modalOptionTextActive,
+                  ]}
+                >
+                  Creados
+                </Text>
+                {filters.eventType === 'created' && (
+                  <Ionicons name="checkmark" size={20} color={colors.primary[500]} />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalOption,
+                  filters.eventType === 'updated' && styles.modalOptionActive,
+                ]}
+                onPress={() => handleEventTypeSelect('updated')}
+              >
+                <Ionicons name="create" size={20} color={colors.primary[500]} />
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    filters.eventType === 'updated' && styles.modalOptionTextActive,
+                  ]}
+                >
+                  Actualizados
+                </Text>
+                {filters.eventType === 'updated' && (
+                  <Ionicons name="checkmark" size={20} color={colors.primary[500]} />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalOption,
+                  filters.eventType === 'deleted' && styles.modalOptionActive,
+                ]}
+                onPress={() => handleEventTypeSelect('deleted')}
+              >
+                <Ionicons name="trash" size={20} color={colors.error[500]} />
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    filters.eventType === 'deleted' && styles.modalOptionTextActive,
+                  ]}
+                >
+                  Eliminados
+                </Text>
+                {filters.eventType === 'deleted' && (
+                  <Ionicons name="checkmark" size={20} color={colors.primary[500]} />
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+            <Button
+              onPress={() => setShowEventTypeModal(false)}
+              variant="secondary"
+            >
+              Cerrar
+            </Button>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Date range selection modal */}
+      <Modal
+        visible={showDateRangeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDateRangeModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDateRangeModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Filtrar por fecha</Text>
+            <ScrollView style={styles.modalList}>
+              <TouchableOpacity
+                style={[
+                  styles.modalOption,
+                  !filters.dateRange && styles.modalOptionActive,
+                ]}
+                onPress={() => handleDateRangeSelect('all')}
+              >
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    !filters.dateRange && styles.modalOptionTextActive,
+                  ]}
+                >
+                  Todo el tiempo
+                </Text>
+                {!filters.dateRange && (
+                  <Ionicons name="checkmark" size={20} color={colors.primary[500]} />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={() => handleDateRangeSelect('today')}
+              >
+                <Text style={styles.modalOptionText}>Hoy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={() => handleDateRangeSelect('week')}
+              >
+                <Text style={styles.modalOptionText}>Últimos 7 días</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={() => handleDateRangeSelect('month')}
+              >
+                <Text style={styles.modalOptionText}>Este mes</Text>
+              </TouchableOpacity>
+            </ScrollView>
+            <Button
+              onPress={() => setShowDateRangeModal(false)}
+              variant="secondary"
+            >
+              Cerrar
+            </Button>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    gap: spacing.md,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: typography.fontSize.base,
+    color: colors.gray[900],
+    padding: 0,
+  },
+  filtersRow: {
+    flexDirection: 'row',
+  },
+  filtersContent: {
+    gap: spacing.sm,
+    paddingRight: spacing.md,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.gray[300],
+  },
+  filterChipActive: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[500],
+  },
+  filterChipText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[700],
+    fontWeight: typography.fontWeight.medium,
+  },
+  filterChipTextActive: {
+    color: colors.primary[500],
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.error[50],
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.error[500],
+  },
+  clearButtonText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.error[500],
+    fontWeight: typography.fontWeight.medium,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  modalContent: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    gap: spacing.lg,
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[900],
+  },
+  modalList: {
+    maxHeight: 300,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+  },
+  modalOptionActive: {
+    backgroundColor: colors.primary[50],
+  },
+  modalOptionText: {
+    flex: 1,
+    fontSize: typography.fontSize.base,
+    color: colors.gray[700],
+  },
+  modalOptionTextActive: {
+    color: colors.primary[500],
+    fontWeight: typography.fontWeight.semibold,
+  },
+});

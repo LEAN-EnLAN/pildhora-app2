@@ -71,17 +71,17 @@ export const Chip: React.FC<ChipProps> = ({
         textInverse: '#FFFFFF',
       },
       success: {
-        bg: colors.success,
+        bg: typeof colors.success === 'string' ? colors.success : colors.success,
         bgLight: '#E6F7EC',
-        border: colors.success,
-        text: colors.success,
+        border: typeof colors.success === 'string' ? colors.success : colors.success,
+        text: typeof colors.success === 'string' ? colors.success : colors.success,
         textInverse: '#FFFFFF',
       },
       error: {
-        bg: colors.error,
+        bg: typeof colors.error === 'object' ? colors.error[500] : colors.error,
         bgLight: '#FFE6E6',
-        border: colors.error,
-        text: colors.error,
+        border: typeof colors.error === 'object' ? colors.error[500] : colors.error,
+        text: typeof colors.error === 'object' ? colors.error[500] : colors.error,
         textInverse: '#FFFFFF',
       },
     };

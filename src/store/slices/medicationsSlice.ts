@@ -1,10 +1,9 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { Medication, ApiResponse, User } from '../../types';
+import { Medication, User } from '../../types';
 
 import { getDbInstance, waitForFirebaseInitialization } from '../../services/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where, orderBy, getDoc, Timestamp } from 'firebase/firestore';
 import { convertTimestamps } from '../../utils/firestoreUtils';
-import { getAuth } from 'firebase/auth';
 import {
   migrateDosageFormat,
   normalizeMedicationForSave,
@@ -13,6 +12,9 @@ import {
   extractDoseUnit,
   extractQuantityType
 } from '../../utils/medicationMigration';
+import { alarmService } from '../../services/alarmService';
+import { medicationToAlarmConfigs } from '../../utils/alarmUtils';
+import { createAndEnqueueEvent } from '../../services/medicationEventService';
 
 interface MedicationsState {
   medications: Medication[];
@@ -140,11 +142,7 @@ export const fetchMedications = createAsyncThunk(
     try {
       // Wait for Firebase to initialize
       await waitForFirebaseInitialization();
-      
-      // Get the current authenticated user
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
-      
+
       // Get the user data from Redux state to validate permissions
       const state = getState() as { auth: { user: User | null } };
       const user = state.auth.user;
@@ -189,11 +187,7 @@ export const addMedication = createAsyncThunk(
     try {
       // Wait for Firebase to initialize
       await waitForFirebaseInitialization();
-      
-      // Get the current authenticated user
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
-      
+
       // Get the user data from Redux state to validate permissions
       const state = getState() as { auth: { user: User | null } };
       const user = state.auth.user;
@@ -240,6 +234,45 @@ export const addMedication = createAsyncThunk(
           updatedAt: Timestamp.now()
         };
         
+        // Create alarms for the medication (non-blocking)
+        try {
+          const alarmConfigs = medicationToAlarmConfigs(savedMedication as Medication);
+          const alarmIds: string[] = [];
+          
+          for (const config of alarmConfigs) {
+            const result = await alarmService.createAlarm(config);
+            if (result.success && !result.fallbackToInApp) {
+              alarmIds.push(result.alarmId);
+            }
+          }
+          
+          // Update medication with alarm IDs if any were created
+          if (alarmIds.length > 0) {
+            await updateDoc(doc(db, 'medications', docRef.id), {
+              nativeAlarmIds: alarmIds,
+            });
+            savedMedication.nativeAlarmIds = alarmIds;
+          }
+        } catch (alarmError) {
+          // Log alarm creation error but don't fail the medication creation
+          console.error('[MedicationsSlice] Failed to create alarms:', alarmError);
+        }
+        
+        // Generate medication created event (non-blocking)
+        try {
+          if (savedMedication.caregiverId && user?.name) {
+            await createAndEnqueueEvent(
+              savedMedication as Medication,
+              user.name,
+              'created'
+            );
+            console.log('[MedicationsSlice] Medication created event enqueued');
+          }
+        } catch (eventError) {
+          // Log event creation error but don't fail the medication creation
+          console.error('[MedicationsSlice] Failed to create medication event:', eventError);
+        }
+        
         // Ensure the response has the new structure
         return convertTimestamps(migrateDosageFormat(savedMedication));
       }
@@ -261,6 +294,45 @@ export const addMedication = createAsyncThunk(
         updatedAt: Timestamp.now()
       };
       
+      // Create alarms for the medication (non-blocking)
+      try {
+        const alarmConfigs = medicationToAlarmConfigs(savedMedication as Medication);
+        const alarmIds: string[] = [];
+        
+        for (const config of alarmConfigs) {
+          const result = await alarmService.createAlarm(config);
+          if (result.success && !result.fallbackToInApp) {
+            alarmIds.push(result.alarmId);
+          }
+        }
+        
+        // Update medication with alarm IDs if any were created
+        if (alarmIds.length > 0) {
+          await updateDoc(doc(db, 'medications', docRef.id), {
+            nativeAlarmIds: alarmIds,
+          });
+          savedMedication.nativeAlarmIds = alarmIds;
+        }
+      } catch (alarmError) {
+        // Log alarm creation error but don't fail the medication creation
+        console.error('[MedicationsSlice] Failed to create alarms:', alarmError);
+      }
+      
+      // Generate medication created event (non-blocking)
+      try {
+        if (savedMedication.caregiverId && user?.name) {
+          await createAndEnqueueEvent(
+            savedMedication as Medication,
+            user.name,
+            'created'
+          );
+          console.log('[MedicationsSlice] Medication created event enqueued');
+        }
+      } catch (eventError) {
+        // Log event creation error but don't fail the medication creation
+        console.error('[MedicationsSlice] Failed to create medication event:', eventError);
+      }
+      
       // Ensure the response has the new structure
       return convertTimestamps(migrateDosageFormat(savedMedication));
     } catch (error: any) {
@@ -276,10 +348,6 @@ export const updateMedication = createAsyncThunk(
     try {
       // Wait for Firebase to initialize
       await waitForFirebaseInitialization();
-      
-      // Get the current authenticated user
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
       
       // Get the user data from Redux state to validate permissions
       const state = getState() as { auth: { user: User | null } };
@@ -333,6 +401,61 @@ export const updateMedication = createAsyncThunk(
           updatedAt: Timestamp.now(),
         });
         
+        // Check if schedule-related fields changed (times, frequency, name, emoji)
+        const scheduleChanged = 
+          updates.times !== undefined || 
+          updates.frequency !== undefined || 
+          updates.name !== undefined || 
+          updates.emoji !== undefined;
+        
+        // Update alarms if schedule changed (non-blocking)
+        if (scheduleChanged) {
+          try {
+            const updatedMedication = { ...medicationData, ...normalizedUpdates, id };
+            const alarmConfigs = medicationToAlarmConfigs(updatedMedication as Medication);
+            const alarmIds: string[] = [];
+            
+            // Delete old alarms
+            await alarmService.deleteAlarm(id);
+            
+            // Create new alarms
+            for (const config of alarmConfigs) {
+              const result = await alarmService.createAlarm(config);
+              if (result.success && !result.fallbackToInApp) {
+                alarmIds.push(result.alarmId);
+              }
+            }
+            
+            // Update medication with new alarm IDs
+            if (alarmIds.length > 0) {
+              await updateDoc(doc(db, 'medications', id), {
+                nativeAlarmIds: alarmIds,
+              });
+              normalizedUpdates.nativeAlarmIds = alarmIds;
+            }
+          } catch (alarmError) {
+            // Log alarm update error but don't fail the medication update
+            console.error('[MedicationsSlice] Failed to update alarms:', alarmError);
+          }
+        }
+        
+        // Generate medication updated event with change tracking (non-blocking)
+        try {
+          if (medicationData.caregiverId && user?.name) {
+            const updatedMedication = { ...medicationData, ...normalizedUpdates, id };
+            await createAndEnqueueEvent(
+              medicationData as Medication,
+              user.name,
+              'updated',
+              updatedMedication as Medication
+            );
+            console.log('[MedicationsSlice] Medication updated event enqueued');
+          }
+        } catch (eventError) {
+          // Log event creation error but don't fail the medication update
+          console.error('[MedicationsSlice] Failed to create medication event:', eventError);
+        }
+        
         // Return the updates with both new and legacy fields
         return convertTimestamps({ id, updates: normalizedUpdates });
       }
@@ -344,6 +467,61 @@ export const updateMedication = createAsyncThunk(
         ...normalizedUpdates,
         updatedAt: Timestamp.now(),
       });
+      
+      // Check if schedule-related fields changed (times, frequency, name, emoji)
+      const scheduleChanged = 
+        updates.times !== undefined || 
+        updates.frequency !== undefined || 
+        updates.name !== undefined || 
+        updates.emoji !== undefined;
+      
+      // Update alarms if schedule changed (non-blocking)
+      if (scheduleChanged) {
+        try {
+          const updatedMedication = { ...medicationData, ...normalizedUpdates, id };
+          const alarmConfigs = medicationToAlarmConfigs(updatedMedication as Medication);
+          const alarmIds: string[] = [];
+          
+          // Delete old alarms
+          await alarmService.deleteAlarm(id);
+          
+          // Create new alarms
+          for (const config of alarmConfigs) {
+            const result = await alarmService.createAlarm(config);
+            if (result.success && !result.fallbackToInApp) {
+              alarmIds.push(result.alarmId);
+            }
+          }
+          
+          // Update medication with new alarm IDs
+          if (alarmIds.length > 0) {
+            await updateDoc(doc(db, 'medications', id), {
+              nativeAlarmIds: alarmIds,
+            });
+            normalizedUpdates.nativeAlarmIds = alarmIds;
+          }
+        } catch (alarmError) {
+          // Log alarm update error but don't fail the medication update
+          console.error('[MedicationsSlice] Failed to update alarms:', alarmError);
+        }
+      }
+      
+      // Generate medication updated event with change tracking (non-blocking)
+      try {
+        if (medicationData.caregiverId && user?.name) {
+          const updatedMedication = { ...medicationData, ...normalizedUpdates, id };
+          await createAndEnqueueEvent(
+            medicationData as Medication,
+            user.name,
+            'updated',
+            updatedMedication as Medication
+          );
+          console.log('[MedicationsSlice] Medication updated event enqueued');
+        }
+      } catch (eventError) {
+        // Log event creation error but don't fail the medication update
+        console.error('[MedicationsSlice] Failed to create medication event:', eventError);
+      }
       
       // Return the updates with both new and legacy fields
       return convertTimestamps({ id, updates: normalizedUpdates });
@@ -360,10 +538,6 @@ export const deleteMedication = createAsyncThunk(
     try {
       // Wait for Firebase to initialize
       await waitForFirebaseInitialization();
-      
-      // Get the current authenticated user
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
       
       // Get the user data from Redux state to validate permissions
       const state = getState() as { auth: { user: User | null } };
@@ -393,6 +567,29 @@ export const deleteMedication = createAsyncThunk(
       
       // Validate user permissions
       await validateUserPermission(user, medicationData.patientId, medicationData.caregiverId);
+      
+      // Generate medication deleted event before deletion (non-blocking)
+      try {
+        if (medicationData.caregiverId && user?.name) {
+          await createAndEnqueueEvent(
+            medicationData as Medication,
+            user.name,
+            'deleted'
+          );
+          console.log('[MedicationsSlice] Medication deleted event enqueued');
+        }
+      } catch (eventError) {
+        // Log event creation error but don't fail the medication deletion
+        console.error('[MedicationsSlice] Failed to create medication event:', eventError);
+      }
+      
+      // Delete alarms before deleting medication (non-blocking)
+      try {
+        await alarmService.deleteAlarm(id);
+      } catch (alarmError) {
+        // Log alarm deletion error but don't fail the medication deletion
+        console.error('[MedicationsSlice] Failed to delete alarms:', alarmError);
+      }
       
       await deleteDoc(doc(db, 'medications', id));
       return id;

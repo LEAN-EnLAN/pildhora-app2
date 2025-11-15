@@ -22,7 +22,17 @@ export const migrateDosageFormat = (medication: any): Medication => {
           quantityType,
           isCustomQuantityType: Boolean(medication.isCustomQuantityType),
           // Keep the old dosage field for backward compatibility
-          dosage: medication.dosage || `${doseValue}${doseUnit}, ${quantityType}`
+          dosage: medication.dosage || `${doseValue}${doseUnit}, ${quantityType}`,
+          // Set default emoji if not present (wizard redesign migration)
+          emoji: medication.emoji || '💊',
+          // Set default nativeAlarmIds if not present
+          nativeAlarmIds: medication.nativeAlarmIds || [],
+          // Set default inventory tracking values if not present
+          trackInventory: medication.trackInventory !== undefined ? medication.trackInventory : false,
+          currentQuantity: medication.currentQuantity,
+          initialQuantity: medication.initialQuantity,
+          lowQuantityThreshold: medication.lowQuantityThreshold,
+          lastRefillDate: medication.lastRefillDate,
         };
       }
     }
@@ -111,7 +121,17 @@ export const migrateDosageFormat = (medication: any): Medication => {
             quantityType,
             isCustomQuantityType,
             // Keep the old dosage field for backward compatibility
-            dosage: dosageString
+            dosage: dosageString,
+            // Set default emoji if not present (wizard redesign migration)
+            emoji: medication.emoji || '💊',
+            // Set default nativeAlarmIds if not present
+            nativeAlarmIds: medication.nativeAlarmIds || [],
+            // Set default inventory tracking values if not present
+            trackInventory: medication.trackInventory !== undefined ? medication.trackInventory : false,
+            currentQuantity: medication.currentQuantity,
+            initialQuantity: medication.initialQuantity,
+            lowQuantityThreshold: medication.lowQuantityThreshold,
+            lastRefillDate: medication.lastRefillDate,
           };
         } else if (dosageParts.length === 1) {
           // Handle case where there's only dose information
@@ -135,7 +155,17 @@ export const migrateDosageFormat = (medication: any): Medication => {
             doseUnit,
             quantityType: 'other', // Default when quantity info is missing
             isCustomQuantityType: false,
-            dosage: dosageString
+            dosage: dosageString,
+            // Set default emoji if not present (wizard redesign migration)
+            emoji: medication.emoji || '💊',
+            // Set default nativeAlarmIds if not present
+            nativeAlarmIds: medication.nativeAlarmIds || [],
+            // Set default inventory tracking values if not present
+            trackInventory: medication.trackInventory !== undefined ? medication.trackInventory : false,
+            currentQuantity: medication.currentQuantity,
+            initialQuantity: medication.initialQuantity,
+            lowQuantityThreshold: medication.lowQuantityThreshold,
+            lastRefillDate: medication.lastRefillDate,
           };
         }
       }
@@ -152,7 +182,17 @@ export const migrateDosageFormat = (medication: any): Medication => {
       doseUnit: String(doseUnit).trim(),
       quantityType: String(quantityType).trim(),
       isCustomQuantityType: Boolean(medication.isCustomQuantityType),
-      dosage: medication.dosage || ''
+      dosage: medication.dosage || '',
+      // Set default emoji if not present (wizard redesign migration)
+      emoji: medication.emoji || '💊',
+      // Set default nativeAlarmIds if not present
+      nativeAlarmIds: medication.nativeAlarmIds || [],
+      // Set default inventory tracking values if not present
+      trackInventory: medication.trackInventory !== undefined ? medication.trackInventory : false,
+      currentQuantity: medication.currentQuantity,
+      initialQuantity: medication.initialQuantity,
+      lowQuantityThreshold: medication.lowQuantityThreshold,
+      lastRefillDate: medication.lastRefillDate,
     };
   } catch (error) {
     console.error('Critical error in migrateDosageFormat for medication:', medication.id, error);
@@ -164,7 +204,17 @@ export const migrateDosageFormat = (medication: any): Medication => {
       doseUnit: medication.doseUnit || 'units',
       quantityType: medication.quantityType || 'other',
       isCustomQuantityType: Boolean(medication.isCustomQuantityType),
-      dosage: medication.dosage || ''
+      dosage: medication.dosage || '',
+      // Set default emoji if not present (wizard redesign migration)
+      emoji: medication.emoji || '💊',
+      // Set default nativeAlarmIds if not present
+      nativeAlarmIds: medication.nativeAlarmIds || [],
+      // Set default inventory tracking values if not present
+      trackInventory: medication.trackInventory !== undefined ? medication.trackInventory : false,
+      currentQuantity: medication.currentQuantity,
+      initialQuantity: medication.initialQuantity,
+      lowQuantityThreshold: medication.lowQuantityThreshold,
+      lastRefillDate: medication.lastRefillDate,
     };
   }
 };

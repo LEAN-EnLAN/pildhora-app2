@@ -34,14 +34,6 @@ if (envDatabaseURL) {
   firebaseConfig.databaseURL = `https://${firebaseConfig.projectId}-default-rtdb.firebaseio.com`;
 }
 
-// Validate required Firebase configuration
-if (!firebaseConfig.apiKey || !firebaseConfig.projectId || !firebaseConfig.appId) {
-  throw new Error(
-    '[Firebase] Missing required Firebase configuration. ' +
-    'Please check your .env file and ensure all EXPO_PUBLIC_FIREBASE_* variables are set.'
-  );
-}
-
 // Initialize Firebase with error handling and promise-based initialization
 let app: FirebaseApp | null = null;
 
@@ -61,6 +53,19 @@ const initializeFirebaseApp = async (): Promise<void> => {
   }
 
   try {
+    // Validate required Firebase configuration before initializing
+    if (!firebaseConfig.apiKey || !firebaseConfig.projectId || !firebaseConfig.appId) {
+      const cfgError = new Error(
+        '[Firebase] Missing required Firebase configuration. ' +
+        'Please check your .env file and ensure all EXPO_PUBLIC_FIREBASE_* variables are set.'
+      );
+      initializationError = cfgError;
+      if (rejectInitialization) {
+        rejectInitialization(cfgError);
+      }
+      throw cfgError;
+    }
+
     // First, check network connectivity to Firebase services
     const enableDiagnostics = process.env.EXPO_PUBLIC_ENABLE_NETWORK_DIAGNOSTICS === 'true';
     if (enableDiagnostics) {

@@ -4,9 +4,11 @@ import { Provider, useSelector } from 'react-redux';
 // @ts-ignore – redux-persist lacks bundled types
 import { PersistGate } from 'redux-persist/integration/react';
 import { store, persistor, RootState } from '../src/store';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ensurePushTokensRegistered } from '../src/services/notifications/push';
-import { Platform } from 'react-native';
+import { Platform, AppState, AppStateStatus } from 'react-native';
+import { lowQuantityNotificationService } from '../src/services/lowQuantityNotification';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Extend Window interface for testing
 declare global {
@@ -31,6 +33,86 @@ function NotificationsBootstrapper() {
   return null;
 }
 
+function InventoryCheckBootstrapper() {
+  const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
+  const userRole = useSelector((state: RootState) => state.auth.user?.role);
+  const userId = useSelector((state: RootState) => state.auth.user?.id);
+  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
+  const [hasRunInitialCheck, setHasRunInitialCheck] = useState(false);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      setAppState(nextAppState);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  // Run initial check on mount
+  useEffect(() => {
+    const runInitialCheck = async () => {
+      if (!isAuthenticated || userRole !== 'patient' || !userId || hasRunInitialCheck) {
+        return;
+      }
+
+      try {
+        console.log('[InventoryCheck] Running initial inventory check');
+        
+        const shouldRun = await lowQuantityNotificationService.shouldRunDailyCheck();
+        
+        if (shouldRun) {
+          await lowQuantityNotificationService.checkAllMedicationsForLowInventory(userId);
+          await lowQuantityNotificationService.markDailyCheckComplete();
+          console.log('[InventoryCheck] Initial check complete');
+        } else {
+          console.log('[InventoryCheck] Daily check already run today');
+        }
+        
+        setHasRunInitialCheck(true);
+      } catch (error) {
+        console.error('[InventoryCheck] Error during initial check:', error);
+      }
+    };
+
+    runInitialCheck();
+  }, [isAuthenticated, userRole, userId, hasRunInitialCheck]);
+
+  // Check on app foreground
+  useEffect(() => {
+    const checkInventoryOnForeground = async () => {
+      // Only check for patients when app comes to foreground
+      if (
+        isAuthenticated &&
+        userRole === 'patient' &&
+        userId &&
+        appState === 'active'
+      ) {
+        try {
+          console.log('[InventoryCheck] App foregrounded, checking inventory');
+          
+          const shouldRun = await lowQuantityNotificationService.shouldRunDailyCheck();
+          
+          if (shouldRun) {
+            await lowQuantityNotificationService.checkAllMedicationsForLowInventory(userId);
+            await lowQuantityNotificationService.markDailyCheckComplete();
+            console.log('[InventoryCheck] Foreground check complete');
+          } else {
+            console.log('[InventoryCheck] Daily check already run today');
+          }
+        } catch (error) {
+          console.error('[InventoryCheck] Error during foreground check:', error);
+        }
+      }
+    };
+
+    checkInventoryOnForeground();
+  }, [isAuthenticated, userRole, userId, appState]);
+
+  return null;
+}
+
 export default function RootLayout() {
   // Expose store to window for testing in browser
   if (typeof window !== 'undefined') {
@@ -42,6 +124,8 @@ export default function RootLayout() {
       <PersistGate loading={null} persistor={persistor}>
         {/* Bootstrap notifications token registration */}
         <NotificationsBootstrapper />
+        {/* Bootstrap daily inventory checks */}
+        <InventoryCheckBootstrapper />
         <SafeAreaProvider>
           <Stack 
             screenOptions={{ 

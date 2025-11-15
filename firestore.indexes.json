@@ -17,6 +17,32 @@
       ]
     },
     {
+      "collectionGroup": "intakeRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "medicationId", "mode": "ASCENDING" },
+        { "fieldPath": "scheduledTime", "mode": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "intakeRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "medicationId", "mode": "ASCENDING" },
+        { "fieldPath": "status", "mode": "ASCENDING" },
+        { "fieldPath": "scheduledTime", "mode": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "intakeRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "medicationId", "mode": "ASCENDING" },
+        { "fieldPath": "scheduledTime", "mode": "ASCENDING" },
+        { "fieldPath": "status", "mode": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "medications",
       "queryScope": "COLLECTION",
       "fields": [
@@ -39,6 +65,40 @@
         { "fieldPath": "role", "mode": "ASCENDING" },
         { "fieldPath": "caregiverId", "mode": "ASCENDING" },
         { "fieldPath": "createdAt", "mode": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "medicationEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "medicationEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "caregiverId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "medicationEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "caregiverId", "order": "ASCENDING" },
+        { "fieldPath": "eventType", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "medicationEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "caregiverId", "order": "ASCENDING" },
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
       ]
     }
   ],

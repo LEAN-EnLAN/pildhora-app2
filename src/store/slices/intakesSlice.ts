@@ -2,7 +2,6 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { IntakeRecord, IntakeStatus, User } from '../../types';
 import { getDbInstance, waitForFirebaseInitialization } from '../../services/firebase';
 import { collection, query, where, orderBy, onSnapshot, getDocs, writeBatch, doc, updateDoc, getDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
 import { convertTimestamps } from '../../utils/firestoreUtils';
 
 interface IntakesState {
@@ -132,10 +131,6 @@ export const startIntakesSubscription = (patientId: string) => async (dispatch: 
     // Wait for Firebase to initialize
     await waitForFirebaseInitialization();
     
-    // Get the current authenticated user
-    const auth = getAuth();
-    const currentUser = auth.currentUser;
-    
     // Get the user data from Redux state to validate permissions
     const state = getState() as { auth: { user: User | null } };
     const user = state.auth.user;
@@ -228,10 +223,6 @@ export const deleteAllIntakes = createAsyncThunk(
     try {
       // Wait for Firebase to initialize
       await waitForFirebaseInitialization();
-      
-      // Get the current authenticated user
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
       
       // Get the user data from Redux state to validate permissions
       const state = getState() as { auth: { user: User | null } };

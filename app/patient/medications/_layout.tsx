@@ -37,7 +37,13 @@ export default function MedicationsLayout() {
           ),
         }}
       />
-      <Stack.Screen name="add" options={{ title: 'Añadir Medicamento' }} />
+      <Stack.Screen
+        name="add"
+        options={{
+          title: 'Añadir Medicamento',
+          headerShown: false,
+        }}
+      />
       <Stack.Screen name="[id]" options={{ title: 'Editar Medicamento' }} />
     </Stack>
   );

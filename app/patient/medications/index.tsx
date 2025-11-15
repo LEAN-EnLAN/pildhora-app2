@@ -1,15 +1,15 @@
-import React, { useEffect, useCallback, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useEffect, useCallback, useMemo, useState } from 'react';
+import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'expo-router';
 import { RootState, AppDispatch } from '../../../src/store';
 import { fetchMedications } from '../../../src/store/slices/medicationsSlice';
 import { Medication } from '../../../src/types';
-import { Button, LoadingSpinner, ErrorMessage, AnimatedListItem } from '../../../src/components/ui';
+import { Button, LoadingSpinner, ErrorMessage, AnimatedListItem, ListSkeleton, MedicationCardSkeleton } from '../../../src/components/ui';
 import { MedicationCard } from '../../../src/components/screens/patient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, typography, borderRadius, shadows } from '../../../src/theme/tokens';
+import { colors, spacing, typography, borderRadius } from '../../../src/theme/tokens';
+import { inventoryService } from '../../../src/services/inventoryService';
 
 export default function MedicationsIndex() {
   const dispatch = useDispatch<AppDispatch>();
@@ -18,25 +18,42 @@ export default function MedicationsIndex() {
   const { medications, loading, error } = useSelector((state: RootState) => state.medications);
   const deviceSlice = useSelector((state: RootState) => (state as any).device);
   const patientId = user?.id;
+  const [lowInventoryMeds, setLowInventoryMeds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (patientId) dispatch(fetchMedications(patientId));
   }, [patientId, dispatch]);
 
+  // Check inventory status for all medications
+  useEffect(() => {
+    const checkInventoryStatus = async () => {
+      const lowMeds = new Set<string>();
+      
+      for (const med of medications) {
+        if (med.trackInventory && med.id) {
+          try {
+            const isLow = await inventoryService.checkLowQuantity(med.id);
+            if (isLow) {
+              lowMeds.add(med.id);
+            }
+          } catch (error) {
+            console.error('[MedicationsIndex] Error checking inventory:', error);
+          }
+        }
+      }
+      
+      setLowInventoryMeds(lowMeds);
+    };
+
+    if (medications.length > 0) {
+      checkInventoryStatus();
+    }
+  }, [medications]);
+
   // Check if device is connected
   const isDeviceConnected = useMemo(() => {
     return deviceSlice?.state?.is_online || false;
   }, [deviceSlice]);
-
-  // Handle navigation to add medication
-  const handleAddMedication = useCallback(() => {
-    router.push('/patient/medications/add');
-  }, [router]);
-
-  // Handle navigation back
-  const handleBack = useCallback(() => {
-    router.back();
-  }, [router]);
 
   // Handle retry on error
   const handleRetry = useCallback(() => {
@@ -46,14 +63,20 @@ export default function MedicationsIndex() {
   }, [patientId, dispatch]);
 
   // Render medication item with animation
-  const renderMedicationItem = useCallback(({ item, index }: { item: Medication; index: number }) => (
-    <AnimatedListItem index={index} delay={50} style={styles.medicationItem}>
-      <MedicationCard
-        medication={item}
-        onPress={() => router.push(`/patient/medications/${item.id}`)}
-      />
-    </AnimatedListItem>
-  ), [router]);
+  const renderMedicationItem = useCallback(({ item, index }: { item: Medication; index: number }) => {
+    const showLowBadge = lowInventoryMeds.has(item.id);
+    
+    return (
+      <AnimatedListItem index={index} delay={50} style={styles.medicationItem}>
+        <MedicationCard
+          medication={item}
+          onPress={() => router.push(`/patient/medications/${item.id}`)}
+          showLowQuantityBadge={showLowBadge}
+          currentQuantity={item.currentQuantity}
+        />
+      </AnimatedListItem>
+    );
+  }, [router, lowInventoryMeds]);
 
   // Render empty state
   const renderEmptyState = useCallback(() => (
@@ -68,14 +91,14 @@ export default function MedicationsIndex() {
       <Button
         variant="primary"
         size="lg"
-        onPress={handleAddMedication}
+        onPress={() => router.push('/patient/medications/add')}
         accessibilityLabel="Agregar primer medicamento"
         accessibilityHint="Navega a la pantalla para agregar un nuevo medicamento"
       >
         Agregar Medicamento
       </Button>
     </View>
-  ), [handleAddMedication]);
+  ), [router]);
 
   // Render mode indicator when device is connected
   const renderModeIndicator = useCallback(() => {
@@ -93,49 +116,19 @@ export default function MedicationsIndex() {
     );
   }, [isDeviceConnected]);
 
-  // Loading state
+  // Loading state with skeleton loaders
   if (loading) {
     return (
-      <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={handleBack}
-              accessibilityLabel="Volver"
-              accessibilityHint="Regresa a la pantalla anterior"
-              accessibilityRole="button"
-            >
-              <Ionicons name="chevron-back" size={24} color={colors.gray[900]} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Medicamentos</Text>
-          </View>
-        </View>
-        <View style={styles.loadingContainer}>
-          <LoadingSpinner size="lg" text="Cargando medicamentos..." />
-        </View>
-      </SafeAreaView>
+      <View style={styles.container}>
+        <ListSkeleton count={4} ItemSkeleton={MedicationCardSkeleton} />
+      </View>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={handleBack}
-              accessibilityLabel="Volver"
-              accessibilityHint="Regresa a la pantalla anterior"
-              accessibilityRole="button"
-            >
-              <Ionicons name="chevron-back" size={24} color={colors.gray[900]} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Medicamentos</Text>
-          </View>
-        </View>
+      <View style={styles.container}>
         <View style={styles.errorContainer}>
           <ErrorMessage
             message={error}
@@ -143,38 +136,12 @@ export default function MedicationsIndex() {
             variant="inline"
           />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleBack}
-            accessibilityLabel="Volver"
-            accessibilityHint="Regresa a la pantalla anterior"
-            accessibilityRole="button"
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.gray[900]} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Medicamentos</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={handleAddMedication}
-          accessibilityLabel="Agregar medicamento"
-          accessibilityHint="Navega a la pantalla para agregar un nuevo medicamento"
-          accessibilityRole="button"
-        >
-          <Ionicons name="add" size={24} color={colors.primary[500]} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Medication List */}
+    <View style={styles.container}>
       <FlatList
         data={medications}
         keyExtractor={(item) => item.id}
@@ -188,7 +155,7 @@ export default function MedicationsIndex() {
         initialNumToRender={10}
         windowSize={10}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -196,42 +163,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    ...shadows.sm,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.gray[50],
-    marginRight: spacing.md,
-  },
-  headerTitle: {
-    fontSize: typography.fontSize['2xl'],
-    fontWeight: typography.fontWeight.bold,
-    color: colors.gray[900],
-  },
-  addButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary[50],
   },
   loadingContainer: {
     flex: 1,

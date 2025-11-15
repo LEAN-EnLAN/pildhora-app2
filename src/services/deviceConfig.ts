@@ -301,9 +301,28 @@ export async function saveDeviceConfig(
       await setDoc(configRef, configData, { merge: true });
       console.log('[DeviceConfig] Successfully saved to Firestore');
     });
+
+    // Mirror desiredConfig into devices/{deviceId}.desiredConfig so the Cloud Function can sync it to RTDB
+    await retryOperation(async () => {
+      const deviceRef = doc(db, 'devices', deviceId);
+      console.log('[DeviceConfig] Saving desiredConfig to Firestore devices:', `devices/${deviceId}`);
+      await setDoc(
+        deviceRef,
+        {
+          desiredConfig: {
+            ...(config.alarmMode !== undefined ? { alarmMode: config.alarmMode } : {}),
+            ...(config.ledIntensity !== undefined ? { ledIntensity: config.ledIntensity } : {}),
+            ...(config.ledColor !== undefined ? { ledColor: config.ledColor } : {}),
+          },
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      console.log('[DeviceConfig] Successfully saved desiredConfig to Firestore devices');
+    });
     
-    // Save to RTDB for real-time sync with device
-    if (config.alarmMode !== undefined || config.ledIntensity !== undefined || config.ledColor !== undefined) {
+    // Legacy RTDB direct write disabled in favor of desiredConfig + Cloud Function mirroring
+    if (false && (config.alarmMode !== undefined || config.ledIntensity !== undefined || config.ledColor !== undefined)) {
       await retryOperation(async () => {
         const rtdbConfig: any = {};
         

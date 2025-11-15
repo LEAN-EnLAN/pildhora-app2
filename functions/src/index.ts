@@ -40,26 +40,38 @@ const TASKS_LOCATION = process.env.TASKS_LOCATION || "us-central1";
 const MISSED_DOSE_QUEUE = process.env.MISSED_DOSE_QUEUE || "missed-dose-queue";
 const CHECK_MISSED_DOSE_URL = process.env.CHECK_MISSED_DOSE_URL || ""; // Must be set via functions config
 const MISSED_DOSE_SA_EMAIL = process.env.MISSED_DOSE_SA_EMAIL || ""; // Optional: use OIDC to secure HTTP target
+const MISSED_DOSE_TASK_SECRET = process.env.MISSED_DOSE_TASK_SECRET || ""; // Optional: shared secret to verify Cloud Tasks caller
 
 const tasksClient = new CloudTasksClient();
 
 async function resolveOwnerUserId(deviceID: string): Promise<string | null> {
-  // Prefer a direct mapping on device
+  // Prefer Firestore canonical device document
+  try {
+    const deviceDoc = await admin.firestore().doc(`devices/${deviceID}`).get();
+    if (deviceDoc.exists) {
+      const data = deviceDoc.data() || {};
+      const primaryPatientId = data.primaryPatientId;
+      if (typeof primaryPatientId === "string" && primaryPatientId.length > 0) {
+        return primaryPatientId;
+      }
+    }
+  } catch (e: any) {
+    logger.warn("Failed to read Firestore device document when resolving ownerUserId", {
+      deviceID,
+      error: e.message,
+    });
+  }
+
+  // Fallback: RTDB ownerUserId mapping
   try {
     const ownerSnap = await admin.database().ref(`devices/${deviceID}/ownerUserId`).get();
     const owner = ownerSnap.val();
     if (typeof owner === "string" && owner.length > 0) return owner;
-  } catch (e) {
-    logger.warn("ownerUserId not found on device node", { deviceID });
+  } catch (e: any) {
+    logger.warn("ownerUserId not found on device node", { deviceID, error: e.message });
   }
 
-  // Fallback: scan users to find who owns this device (simple, not ideal for very large datasets)
-  const usersSnap = await admin.database().ref("users").get();
-  const users = usersSnap.val() || {};
-  for (const uid of Object.keys(users)) {
-    const hasDevice = users[uid]?.devices?.[deviceID] === true;
-    if (hasDevice) return uid;
-  }
+  // As a safety net, we no longer scan the entire /users tree to avoid scaling issues.
   return null;
 }
 
@@ -85,7 +97,23 @@ export const onDeviceStatusUpdated = onValueUpdated({ ref: "/devices/{deviceID}/
     return;
   }
 
-  const project = process.env.GCLOUD_PROJECT || process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG!).projectId : "";
+  // Resolve project ID robustly for Cloud Tasks
+  let project = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "";
+  if (!project && process.env.FIREBASE_CONFIG) {
+    try {
+      const cfg = JSON.parse(process.env.FIREBASE_CONFIG);
+      project = cfg.projectId || "";
+    } catch (e: any) {
+      logger.error("Failed to parse FIREBASE_CONFIG when resolving projectId for Cloud Tasks", {
+        error: e.message,
+      });
+    }
+  }
+  if (!project) {
+    logger.error("Project ID could not be resolved; skipping Cloud Task creation", { deviceID, userID });
+    return;
+  }
+
   const parent = tasksClient.queuePath(project, TASKS_LOCATION, MISSED_DOSE_QUEUE);
 
   const payload = { deviceID, userID, scheduledAt: Date.now() };
@@ -93,7 +121,10 @@ export const onDeviceStatusUpdated = onValueUpdated({ ref: "/devices/{deviceID}/
     httpRequest: {
       httpMethod: "POST",
       url: CHECK_MISSED_DOSE_URL,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(MISSED_DOSE_TASK_SECRET ? { "X-Missed-Dose-Secret": MISSED_DOSE_TASK_SECRET } : {}),
+      },
       body: Buffer.from(JSON.stringify(payload)).toString("base64"),
     },
     scheduleTime: {
@@ -120,6 +151,16 @@ export const checkMissedDose = onRequest(async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).send("Method Not Allowed");
     return;
+  }
+
+  // Optional shared-secret validation to ensure this is invoked only by our Cloud Tasks.
+  if (MISSED_DOSE_TASK_SECRET) {
+    const provided = req.get("X-Missed-Dose-Secret") || "";
+    if (provided !== MISSED_DOSE_TASK_SECRET) {
+      logger.warn("checkMissedDose called with invalid or missing task secret");
+      res.status(403).send("Forbidden");
+      return;
+    }
   }
 
   const { deviceID, userID } = req.body || {};
@@ -241,14 +282,28 @@ export const onUserDeviceUnlinked = onValueDeleted({ ref: "/users/{uid}/devices/
   const deviceID = event.params.deviceID as string;
 
   try {
+    const deviceRef = admin.firestore().doc(`devices/${deviceID}`);
+    const deviceSnap = await deviceRef.get();
+    const deviceData = deviceSnap.exists ? deviceSnap.data() || {} : {};
+
     // Remove from linkedUsers map
-    await admin.firestore().doc(`devices/${deviceID}`).set(
-      {
-        [`linkedUsers.${uid}`]: admin.firestore.FieldValue.delete(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+    const updates: Record<string, any> = {
+      [`linkedUsers.${uid}`]: admin.firestore.FieldValue.delete(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    // If this user was the primary patient, clear or reassign it
+    if (deviceData.primaryPatientId === uid) {
+      const linkedUsers = (deviceData.linkedUsers || {}) as Record<string, string>;
+      const remainingPatientId =
+        Object.entries(linkedUsers)
+          .filter(([otherUid, role]) => otherUid !== uid && role === "patient")
+          .map(([otherUid]) => otherUid)[0] || null;
+
+      updates.primaryPatientId = remainingPatientId || null;
+    }
+
+    await deviceRef.set(updates, { merge: true });
 
     // Mark deviceLinks inactive
     await admin.firestore().doc(`deviceLinks/${deviceID}_${uid}`).set(
@@ -258,6 +313,30 @@ export const onUserDeviceUnlinked = onValueDeleted({ ref: "/users/{uid}/devices/
       },
       { merge: true }
     );
+
+    // If the unlinked user was the RTDB owner, clear or reassign ownerUserId
+    try {
+      const ownerSnap = await admin.database().ref(`devices/${deviceID}/ownerUserId`).get();
+      const currentOwner = ownerSnap.val();
+      if (currentOwner === uid) {
+        let newOwner: string | null = null;
+        const updatedSnap = await deviceRef.get();
+        const updatedData = updatedSnap.exists ? updatedSnap.data() || {} : {};
+        const linkedUsers = (updatedData.linkedUsers || {}) as Record<string, string>;
+        newOwner =
+          Object.entries(linkedUsers)
+            .filter(([otherUid, role]) => role === "patient")
+            .map(([otherUid]) => otherUid)[0] || null;
+
+        if (newOwner) {
+          await admin.database().ref(`devices/${deviceID}/ownerUserId`).set(newOwner);
+        } else {
+          await admin.database().ref(`devices/${deviceID}/ownerUserId`).set(null);
+        }
+      }
+    } catch (e: any) {
+      logger.warn("Failed to update RTDB ownerUserId on unlink", { deviceID, uid, error: e.message });
+    }
 
     logger.info("Mirrored user-device unlink to Firestore", { deviceID, uid });
   } catch (e: any) {
@@ -404,16 +483,60 @@ export const onDeviceLinkUpdated = onDocumentUpdated("deviceLinks/{linkId}", asy
 
   try {
     if (afterStatus === "inactive") {
+      const deviceRef = admin.firestore().doc(`devices/${deviceId}`);
+      const deviceSnap = await deviceRef.get();
+      const deviceData = deviceSnap.exists ? deviceSnap.data() || {} : {};
+
+      // Remove from Firestore devices linkedUsers
+      const updates: Record<string, any> = {
+        [`linkedUsers.${userId}`]: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      // Adjust primaryPatientId if needed
+      if (deviceData.primaryPatientId === userId) {
+        const linkedUsers = (deviceData.linkedUsers || {}) as Record<string, string>;
+        const remainingPatientId =
+          Object.entries(linkedUsers)
+            .filter(([otherUid, role]) => otherUid !== userId && role === "patient")
+            .map(([otherUid]) => otherUid)[0] || null;
+
+        updates.primaryPatientId = remainingPatientId || null;
+      }
+
+      await deviceRef.set(updates, { merge: true });
+
       // Remove from RTDB mapping
       await admin.database().ref(`users/${userId}/devices/${deviceId}`).set(null);
-      // Remove from Firestore devices linkedUsers
-      await admin.firestore().doc(`devices/${deviceId}`).set(
-        {
-          [`linkedUsers.${userId}`]: admin.firestore.FieldValue.delete(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
+
+      // Update RTDB ownerUserId if necessary
+      try {
+        const ownerSnap = await admin.database().ref(`devices/${deviceId}/ownerUserId`).get();
+        const currentOwner = ownerSnap.val();
+        if (currentOwner === userId) {
+          let newOwner: string | null = null;
+          const updatedSnap = await deviceRef.get();
+          const updatedData = updatedSnap.exists ? updatedSnap.data() || {} : {};
+          const linkedUsers = (updatedData.linkedUsers || {}) as Record<string, string>;
+          newOwner =
+            Object.entries(linkedUsers)
+              .filter(([otherUid, role]) => role === "patient")
+              .map(([otherUid]) => otherUid)[0] || null;
+
+          if (newOwner) {
+            await admin.database().ref(`devices/${deviceId}/ownerUserId`).set(newOwner);
+          } else {
+            await admin.database().ref(`devices/${deviceId}/ownerUserId`).set(null);
+          }
+        }
+      } catch (e: any) {
+        logger.warn("Failed to update RTDB ownerUserId on device link status change", {
+          deviceId,
+          userId,
+          error: e.message,
+        });
+      }
+
       logger.info("Mirrored Firestore deviceLinks inactive to RTDB unlink", { linkId, deviceId, userId });
     }
   } catch (e: any) {
@@ -503,6 +626,13 @@ export const onDispenseEventToIntake = onValueCreated({ ref: "/devices/{deviceID
 
   try {
     const userID = await resolveOwnerUserId(deviceID);
+    if (!userID) {
+      logger.error("onDispenseEventToIntake: unable to resolve owner userId, skipping intake record creation", {
+        deviceID,
+        eventID,
+      });
+      return;
+    }
     const medId = data.medId as string | undefined;
     let medicationName = data.medicationName || "";
     let dosage = data.dosage || "";
@@ -520,22 +650,108 @@ export const onDispenseEventToIntake = onValueCreated({ ref: "/devices/{deviceID
     const ok = data.ok !== false;
 
     const docId = `${deviceID}_${eventID}`;
-    await admin.firestore().doc(`intakeRecords/${docId}`).set({
-      deviceId: deviceID,
-      patientId: userID || "",
-      medicationId: medId || null,
-      medicationName,
-      dosage,
-      scheduledTime: new Date(scheduledMs),
-      status: ok ? "TAKEN" : "MISSED",
-      takenAt: new Date(dispensedMs),
-      createdBy: "device",
-      requestedBy: data.requestedBy || "",
-      requestedAt: new Date(data.requestedAt || dispensedMs),
-    }, { merge: false });
+    await admin.firestore().doc(`intakeRecords/${docId}`).set(
+      {
+        deviceId: deviceID,
+        patientId: userID,
+        medicationId: medId || null,
+        medicationName,
+        dosage,
+        scheduledTime: new Date(scheduledMs),
+        status: ok ? "TAKEN" : "MISSED",
+        takenAt: new Date(dispensedMs),
+        createdBy: "device",
+        requestedBy: data.requestedBy || "",
+        requestedAt: new Date(data.requestedAt || dispensedMs),
+      },
+      { merge: false }
+    );
 
     logger.info("Created intake record from dispense event", { deviceID, eventID });
   } catch (e: any) {
     logger.error("onDispenseEventToIntake error", { error: e.message, deviceID, eventID });
+  }
+});
+
+/**
+ * Rate limiting enforcement for medicationEvents collection.
+ * Monitors event creation and logs warnings when patients approach the rate limit.
+ * Automatically blocks excessive event creation by deleting events that exceed the limit.
+ */
+export const onMedicationEventRateLimit = onDocumentCreated("medicationEvents/{eventId}", async (event) => {
+  const eventId = event.params.eventId as string;
+  const eventData = event.data?.data();
+  
+  if (!eventData) {
+    logger.warn("onMedicationEventRateLimit: no event data", { eventId });
+    return;
+  }
+
+  const patientId = eventData.patientId as string;
+  if (!patientId) {
+    logger.warn("onMedicationEventRateLimit: missing patientId", { eventId });
+    return;
+  }
+
+  try {
+    // Count events created by this patient in the last hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentEventsSnapshot = await admin.firestore()
+      .collection('medicationEvents')
+      .where('patientId', '==', patientId)
+      .where('timestamp', '>', oneHourAgo)
+      .get();
+
+    const eventCount = recentEventsSnapshot.size;
+
+    // Log warning if approaching limit (80% threshold)
+    if (eventCount >= 80 && eventCount < 100) {
+      logger.warn("Patient approaching medication event rate limit", {
+        patientId,
+        eventCount,
+        limit: 100,
+        eventId
+      });
+    }
+
+    // Enforce hard limit: delete events that exceed 100/hour
+    if (eventCount > 100) {
+      logger.error("Patient exceeded medication event rate limit", {
+        patientId,
+        eventCount,
+        limit: 100,
+        eventId,
+        action: "deleting_event"
+      });
+
+      // Delete the event that exceeded the limit
+      await admin.firestore().doc(`medicationEvents/${eventId}`).delete();
+
+      // Optionally notify the patient or caregiver
+      try {
+        const userDoc = await admin.firestore().doc(`users/${patientId}`).get();
+        const userData = userDoc.data();
+        
+        if (userData?.caregiverId) {
+          // Log for caregiver monitoring
+          logger.info("Rate limit exceeded - caregiver notification recommended", {
+            patientId,
+            caregiverId: userData.caregiverId,
+            eventCount
+          });
+        }
+      } catch (notifyError: any) {
+        logger.warn("Failed to retrieve user data for rate limit notification", {
+          error: notifyError.message,
+          patientId
+        });
+      }
+    }
+  } catch (error: any) {
+    logger.error("onMedicationEventRateLimit error", {
+      error: error.message,
+      eventId,
+      patientId
+    });
   }
 });
