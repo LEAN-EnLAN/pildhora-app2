@@ -22,10 +22,13 @@ export default function PatientLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="home" options={{ title: 'Patient Home' }} />
-      <Stack.Screen name="link-device" options={{ title: 'Enlazar Dispositivo' }} />
-      <Stack.Screen name="settings" options={{ title: 'Configuraciones' }} />
-      <Stack.Screen name="edit-profile" options={{ title: 'Editar perfil' }} />
+      <Stack.Screen name="home" />
+      <Stack.Screen name="medications" />
+      <Stack.Screen name="history" />
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="device-settings" />
+      <Stack.Screen name="device-provisioning" />
+      <Stack.Screen name="edit-profile" />
     </Stack>
   );
 }

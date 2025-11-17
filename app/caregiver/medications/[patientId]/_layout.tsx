@@ -10,7 +10,6 @@ export default function CaregiverPatientMedicationsLayout() {
       <Stack.Screen
         name="index"
         options={{
-          title: 'Medicamentos',
           headerRight: () => (
             <Link href={`/caregiver/medications/${pid}/add`} asChild>
               <Pressable>
@@ -20,8 +19,8 @@ export default function CaregiverPatientMedicationsLayout() {
           ),
         }}
       />
-      <Stack.Screen name="add" options={{ title: 'Añadir Medicamento' }} />
-      <Stack.Screen name="[id]" options={{ title: 'Editar Medicamento' }} />
+      <Stack.Screen name="add" />
+      <Stack.Screen name="[id]" />
     </Stack>
   );
 }

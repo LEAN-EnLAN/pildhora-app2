@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Text, View, Alert, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { Text, View, Alert, KeyboardAvoidingView, Platform, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -8,22 +8,32 @@ import { RootState, AppDispatch } from '../../src/store';
 import { getAuthInstance } from '../../src/services/firebase';
 import { Button, Card, Container, AppIcon } from '../../src/components/ui';
 import { PHTextField } from '../../src/components/ui/PHTextField';
+import { getPostAuthRoute } from '../../src/services/routing';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isRouting, setIsRouting] = useState(false);
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { loading, error, isAuthenticated, user, initializing } = useSelector((state: RootState) => state.auth);
 
   useEffect(() => {
-    if (!initializing && isAuthenticated && user) {
-      if (user.role === 'patient') {
-        router.replace('/patient/home');
-      } else {
-        router.replace('/caregiver/dashboard');
+    const handleRouting = async () => {
+      if (!initializing && isAuthenticated && user) {
+        setIsRouting(true);
+        try {
+          const route = await getPostAuthRoute(user);
+          router.replace(route);
+        } catch (error: any) {
+          console.error('[LoginScreen] Routing error:', error);
+          Alert.alert('Error de navegación', error.userMessage || 'No se pudo determinar la ruta.');
+          setIsRouting(false);
+        }
       }
-    }
+    };
+
+    handleRouting();
   }, [isAuthenticated, user, initializing, router]);
 
   const handleLogin = async () => {
@@ -31,23 +41,26 @@ export default function LoginScreen() {
       Alert.alert('Error', 'Por favor completa todos los campos');
       return;
     }
-    if (loading) return;
+    if (loading || isRouting) return;
     if (isAuthenticated && user) {
-      if (user.role === 'patient') {
-        router.replace('/patient/home');
-      } else {
-        router.replace('/caregiver/dashboard');
+      setIsRouting(true);
+      try {
+        const route = await getPostAuthRoute(user);
+        router.replace(route);
+      } catch (error: any) {
+        console.error('[LoginScreen] Routing error:', error);
+        Alert.alert('Error de navegación', error.userMessage || 'No se pudo determinar la ruta.');
+        setIsRouting(false);
       }
       return;
     }
     try {
+      setIsRouting(true);
       const result = await dispatch(signIn({ email: email.trim(), password })).unwrap();
-      if (result.role === 'patient') {
-        router.replace('/patient/home');
-      } else {
-        router.replace('/caregiver/dashboard');
-      }
+      const route = await getPostAuthRoute(result);
+      router.replace(route);
     } catch (error: any) {
+      setIsRouting(false);
       const message = typeof error === 'string' ? error : (error?.message || 'Error desconocido');
       let friendly = message;
       if (message.includes('auth/wrong-password')) friendly = 'Contraseña incorrecta. Intenta nuevamente.';
@@ -58,15 +71,14 @@ export default function LoginScreen() {
   };
 
   const handleGoogleLogin = async () => {
-    if (loading) return;
+    if (loading || isRouting) return;
     try {
+      setIsRouting(true);
       const result = await dispatch(signInWithGoogle({})).unwrap();
-      if (result.role === 'patient') {
-        router.replace('/patient/home');
-      } else {
-        router.replace('/caregiver/dashboard');
-      }
+      const route = await getPostAuthRoute(result);
+      router.replace(route);
     } catch (error: any) {
+      setIsRouting(false);
       const message = typeof error === 'string' ? error : (error?.message || 'Error desconocido');
       Alert.alert('Error de Google', message);
     }
@@ -84,6 +96,19 @@ export default function LoginScreen() {
     } catch {}
     Alert.alert('Sesión cerrada', 'Has cerrado sesión. Ahora puedes iniciar con otra cuenta.');
   };
+
+  if (isRouting) {
+    return (
+      <SafeAreaView edges={['top','bottom']} style={styles.flex1}>
+        <Container style={styles.flex1}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3B82F6" />
+            <Text style={styles.loadingText}>Redirigiendo...</Text>
+          </View>
+        </Container>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['top','bottom']} style={styles.flex1}>
@@ -133,17 +158,17 @@ export default function LoginScreen() {
 
           <Button
             onPress={handleLogin}
-            disabled={loading}
+            disabled={loading || isRouting}
             variant="primary"
             size="lg"
             style={styles.loginButton}
           >
-            {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+            {loading || isRouting ? 'Iniciando sesión...' : 'Iniciar sesión'}
           </Button>
 
           <Button
             onPress={handleGoogleLogin}
-            disabled={loading}
+            disabled={loading || isRouting}
             variant="secondary"
             size="lg"
             style={[styles.loginButton, styles.googleButton]}
@@ -260,5 +285,15 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 0,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
   },
 });

@@ -65,6 +65,8 @@ export const updateProfile = createAsyncThunk(
             name,
             role: 'patient',
             createdAt: new Date(),
+            onboardingComplete: false,
+            onboardingStep: 'device_provisioning',
           };
 
       return updatedUser;
@@ -90,13 +92,15 @@ export const signUp = createAsyncThunk(
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Create user document in Firestore
+      // Create user document in Firestore with onboarding fields
       const userData: User = {
         id: user.uid,
         email: user.email!,
         name,
         role,
         createdAt: new Date(),
+        onboardingComplete: false,
+        onboardingStep: role === 'patient' ? 'device_provisioning' : 'device_connection',
       };
 
       await setDoc(doc(db, 'users', user.uid), userData);
@@ -176,12 +180,15 @@ export const signInWithGoogle = createAsyncThunk(
         return userData;
       }
 
+      const userRole = payload.role || 'patient';
       const userData: User = {
         id: firebaseUser.uid,
         email: firebaseUser.email || '',
         name: firebaseUser.displayName || '',
-        role: payload.role || 'patient',
+        role: userRole,
         createdAt: new Date(),
+        onboardingComplete: false,
+        onboardingStep: userRole === 'patient' ? 'device_provisioning' : 'device_connection',
       };
       await setDoc(userDocRef, userData);
       return userData;

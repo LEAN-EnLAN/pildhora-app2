@@ -35,6 +35,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme/tokens';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -53,6 +54,10 @@ export interface CaregiverHeaderProps {
   onEmergency?: () => void;
   /** Callback when account menu is opened */
   onAccountMenu?: () => void;
+  /** Whether to show back button */
+  showBackButton?: boolean;
+  /** Callback when back button is pressed */
+  onBackPress?: () => void;
 }
 
 export default function CaregiverHeader({
@@ -62,6 +67,8 @@ export default function CaregiverHeader({
   onLogout,
   onEmergency,
   onAccountMenu,
+  showBackButton = false,
+  onBackPress,
 }: CaregiverHeaderProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -73,6 +80,7 @@ export default function CaregiverHeader({
   // Animation refs for button press feedback
   const emergencyButtonScale = useRef(new Animated.Value(1)).current;
   const accountButtonScale = useRef(new Animated.Value(1)).current;
+  const backButtonScale = useRef(new Animated.Value(1)).current;
 
   /**
    * Handles emergency button press
@@ -109,7 +117,7 @@ export default function CaregiverHeader({
 
   /**
    * Handles account menu button press
-   * Shows account menu modal with logout, settings, device management options
+   * Shows account menu modal with logout, settings, device connection options
    */
   const handleAccountMenuPress = () => {
     if (onAccountMenu) {
@@ -132,10 +140,11 @@ export default function CaregiverHeader({
         },
         (buttonIndex) => {
           if (buttonIndex === 1) {
-            // Navigate to settings (to be implemented)
+            // Navigate to settings
+            router.push('/caregiver/settings');
           } else if (buttonIndex === 2) {
-            // Navigate to device management
-            router.push('/caregiver/add-device');
+            // Navigate to device connection (code entry)
+            router.push('/caregiver/device-connection');
           } else if (buttonIndex === 3) {
             // Logout
             if (onLogout) {
@@ -165,10 +174,23 @@ export default function CaregiverHeader({
     setAccountMenuVisible(false);
     
     if (action === 'settings') {
+      router.push('/caregiver/settings');
     } else if (action === 'devices') {
-      router.push('/caregiver/add-device');
+      router.push('/caregiver/device-connection');
     } else if (action === 'logout' && onLogout) {
       onLogout();
+    }
+  };
+
+  /**
+   * Handles back button press
+   */
+  const handleBackPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (onBackPress) {
+      onBackPress();
+    } else {
+      router.push('/caregiver/dashboard');
     }
   };
 
@@ -194,33 +216,66 @@ export default function CaregiverHeader({
           },
         ]}
       >
-        {/* Left section: Branding and title */}
+        {/* Left section: Back button or Branding and title */}
         <View style={styles.leftSection}>
-          <View style={styles.brandingContainer}>
-            <AppIcon size="sm" showShadow={false} rounded={true} />
-            <Text
-              style={styles.logo}
-              accessibilityRole="header"
-              accessibilityLabel="PILDHORA"
-            >
-              PILDHORA
-            </Text>
-          </View>
-          {caregiverName && (
-            <Text
-              style={styles.caregiverName}
-              accessibilityLabel={`Caregiver: ${caregiverName}`}
-            >
-              {caregiverName}
-            </Text>
-          )}
-          {showScreenTitle && title && (
-            <Text
-              style={styles.screenTitle}
-              accessibilityLabel={`Current screen: ${title}`}
-            >
-              {title}
-            </Text>
+          {showBackButton ? (
+            <>
+              <Animated.View
+                style={{
+                  transform: [{ scale: backButtonScale }],
+                }}
+              >
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={handleBackPress}
+                  onPressIn={() => animateButtonPress(backButtonScale, true)}
+                  onPressOut={() => animateButtonPress(backButtonScale, false)}
+                  accessibilityLabel="Volver al tablero"
+                  accessibilityHint="Regresa al tablero principal del cuidador"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="arrow-back" size={24} color={colors.gray[900]} />
+                  <Text style={styles.backButtonText}>Tablero</Text>
+                </TouchableOpacity>
+              </Animated.View>
+              {title && (
+                <Text
+                  style={styles.pageTitle}
+                  accessibilityLabel={`Current screen: ${title}`}
+                >
+                  {title}
+                </Text>
+              )}
+            </>
+          ) : (
+            <>
+              <View style={styles.brandingContainer}>
+                <AppIcon size="sm" showShadow={false} rounded={true} />
+                <Text
+                  style={styles.logo}
+                  accessibilityRole="header"
+                  accessibilityLabel="PILDHORA"
+                >
+                  PILDHORA
+                </Text>
+              </View>
+              {caregiverName && (
+                <Text
+                  style={styles.caregiverName}
+                  accessibilityLabel={`Caregiver: ${caregiverName}`}
+                >
+                  {caregiverName}
+                </Text>
+              )}
+              {showScreenTitle && title && (
+                <Text
+                  style={styles.screenTitle}
+                  accessibilityLabel={`Current screen: ${title}`}
+                >
+                  {title}
+                </Text>
+              )}
+            </>
           )}
         </View>
 
@@ -341,14 +396,14 @@ export default function CaregiverHeader({
           </Button>
           
           <Button
-            variant="secondary"
+            variant="primary"
             size="lg"
             fullWidth
             onPress={() => handleAccountAction('devices')}
             style={styles.modalButton}
-            leftIcon={<Ionicons name="hardware-chip-outline" size={20} color={colors.gray[700]} />}
+            leftIcon={<Ionicons name="key-outline" size={20} color={colors.surface} />}
             accessibilityLabel="Device management"
-            accessibilityHint="Opens device management screen"
+            accessibilityHint="Opens device connection screen to enter connection code"
           >
             Gestión de Dispositivos
           </Button>
@@ -390,9 +445,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray[200],
-    ...shadows.sm,
+    borderBottomWidth: 0,
+    ...shadows.md,
   },
   leftSection: {
     flex: 1,
@@ -405,7 +459,7 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: typography.fontSize['2xl'],
     fontWeight: typography.fontWeight.extrabold,
-    color: colors.gray[900],
+    color: colors.primary[600],
     letterSpacing: -0.5,
   },
   caregiverName: {
@@ -426,18 +480,37 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   actionButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.full,
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    ...shadows.sm,
+    ...shadows.md,
   },
   emergencyButton: {
-    backgroundColor: '#DC2626', // Darker red for better contrast with white icon (4.8:1)
+    backgroundColor: colors.error[600],
   },
   accountButton: {
-    backgroundColor: colors.gray[700],
+    backgroundColor: colors.primary[500],
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    minHeight: 44,
+    marginBottom: spacing.xs,
+  },
+  backButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.gray[900],
+  },
+  pageTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[900],
+    marginTop: spacing.xs,
   },
   modalContent: {
     gap: spacing.md,

@@ -419,6 +419,9 @@ export const onDeviceStateMirroredToFirestore = onValueUpdated({ ref: "/devices/
 /**
  * Firestore-only linking support: when a deviceLinks doc is created/activated,
  * mirror the relationship to RTDB and update devices/{deviceID}.linkedUsers.
+ * 
+ * Task 9.3: Send notification to patient about new caregiver connection
+ * Requirements: 5.4, 5.5, 5.6
  */
 export const onDeviceLinkCreated = onDocumentCreated("deviceLinks/{linkId}", async (event) => {
   const after = event.data?.data();
@@ -435,6 +438,7 @@ export const onDeviceLinkCreated = onDocumentCreated("deviceLinks/{linkId}", asy
     // Determine user role from Firestore users/{uid}
     const userDoc = await admin.firestore().doc(`users/${userId}`).get();
     const role = (userDoc.get("role") || "patient") as "patient" | "caregiver";
+    const userName = userDoc.get("name") || "Usuario";
 
     // Update Firestore devices/{deviceID}.linkedUsers map
     await admin.firestore().doc(`devices/${deviceId}`).set(
@@ -454,6 +458,101 @@ export const onDeviceLinkCreated = onDocumentCreated("deviceLinks/{linkId}", asy
       const ownerSnap = await admin.database().ref(`devices/${deviceId}/ownerUserId`).get();
       if (!ownerSnap.exists()) {
         await admin.database().ref(`devices/${deviceId}/ownerUserId`).set(userId);
+      }
+    }
+
+    // Task 9.3: Send notification to patient about new caregiver connection
+    // Requirements: 5.6
+    if (role === "caregiver") {
+      try {
+        // Get the device document to find the patient
+        const deviceDoc = await admin.firestore().doc(`devices/${deviceId}`).get();
+        const deviceData = deviceDoc.data();
+        const patientId = deviceData?.primaryPatientId;
+
+        if (patientId) {
+          // Get patient information
+          const patientDoc = await admin.firestore().doc(`users/${patientId}`).get();
+          const patientData = patientDoc.data();
+          const patientName = patientData?.name || "Paciente";
+
+          // Create a notification document in Firestore for the patient
+          await admin.firestore().collection("notifications").add({
+            userId: patientId,
+            type: "caregiver_connected",
+            title: "Nuevo Cuidador Conectado",
+            message: `${userName} se ha conectado a tu dispositivo.`,
+            data: {
+              caregiverId: userId,
+              caregiverName: userName,
+              deviceId: deviceId,
+              linkId: linkId,
+            },
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          // Try to send push notification if FCM tokens are available
+          try {
+            const tokensSnap = await admin.database().ref(`users/${patientId}/fcmTokens`).get();
+            const tokensMap = tokensSnap.val() || {};
+            const tokens = Object.keys(tokensMap);
+
+            if (tokens.length > 0) {
+              await admin.messaging().sendMulticast({
+                tokens,
+                notification: {
+                  title: "Nuevo Cuidador Conectado",
+                  body: `${userName} se ha conectado a tu dispositivo.`,
+                },
+                data: {
+                  type: "caregiver_connected",
+                  caregiverId: userId,
+                  caregiverName: userName,
+                  deviceId: deviceId,
+                  linkId: linkId,
+                },
+              });
+              logger.info("Sent push notification to patient about caregiver connection", {
+                patientId,
+                caregiverId: userId,
+                deviceId,
+              });
+            } else {
+              logger.info("No FCM tokens found for patient, notification stored in Firestore only", {
+                patientId,
+                caregiverId: userId,
+                deviceId,
+              });
+            }
+          } catch (pushError: any) {
+            logger.warn("Failed to send push notification to patient", {
+              error: pushError.message,
+              patientId,
+              caregiverId: userId,
+              deviceId,
+            });
+          }
+
+          logger.info("Notified patient about new caregiver connection", {
+            patientId,
+            patientName,
+            caregiverId: userId,
+            caregiverName: userName,
+            deviceId,
+          });
+        } else {
+          logger.warn("No patient found for device, skipping notification", {
+            deviceId,
+            caregiverId: userId,
+          });
+        }
+      } catch (notificationError: any) {
+        logger.error("Failed to send notification to patient about caregiver connection", {
+          error: notificationError.message,
+          deviceId,
+          caregiverId: userId,
+        });
       }
     }
 

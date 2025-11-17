@@ -1,12 +1,14 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../ui/Card';
 import { colors, spacing, typography } from '../../../theme/tokens';
+import { useDeviceLinks } from '../../../hooks/useDeviceLinks';
 
 interface DeviceStatusCardProps {
   deviceId?: string;
   batteryLevel?: number | null;
-  status: 'idle' | 'dispensing' | 'error' | 'offline';
+  status: 'idle' | 'dispensing' | 'error' | 'offline' | 'pending';
   isOnline: boolean;
   style?: any;
 }
@@ -18,9 +20,17 @@ export const DeviceStatusCard: React.FC<DeviceStatusCardProps> = React.memo(({
   isOnline,
   style
 }) => {
+  // Real-time device links listener
+  const { caregiverCount, hasCaregivers, isLoading: linksLoading } = useDeviceLinks({
+    deviceId: deviceId || undefined,
+    enabled: !!deviceId,
+  });
+
   const statusText = useMemo(() => {
     if (!isOnline) return 'Desconectado';
     switch (status) {
+      case 'pending':
+        return 'Pendiente';
       case 'idle':
         return 'Activo';
       case 'dispensing':
@@ -34,9 +44,29 @@ export const DeviceStatusCard: React.FC<DeviceStatusCardProps> = React.memo(({
     }
   }, [isOnline, status]);
 
+  // Connection mode text and color
+  const connectionMode = useMemo(() => {
+    if (!deviceId) return null;
+    if (linksLoading) return { text: 'Verificando...', color: colors.gray[400], icon: 'time-outline' as const };
+    if (hasCaregivers) {
+      return {
+        text: caregiverCount === 1 ? 'Modo Cuidador (1)' : `Modo Cuidador (${caregiverCount})`,
+        color: colors.primary[500],
+        icon: 'people' as const,
+      };
+    }
+    return {
+      text: 'Modo Autónomo',
+      color: colors.success,
+      icon: 'person' as const,
+    };
+  }, [deviceId, linksLoading, hasCaregivers, caregiverCount]);
+
   const statusColor = useMemo(() => {
     if (!isOnline || status === 'offline') return colors.gray[400];
     switch (status) {
+      case 'pending':
+        return typeof colors.warning === 'string' ? colors.warning : colors.warning[500];
       case 'idle':
         return colors.success;
       case 'dispensing':
@@ -76,6 +106,28 @@ export const DeviceStatusCard: React.FC<DeviceStatusCardProps> = React.memo(({
       
       {deviceId ? (
         <View style={styles.content}>
+          {/* Connection Mode Banner */}
+          {connectionMode && (
+            <View 
+              style={[
+                styles.modeBanner,
+                { backgroundColor: `${connectionMode.color}15` }
+              ]}
+              accessible={true}
+              accessibilityLabel={`Connection mode: ${connectionMode.text}`}
+            >
+              <Ionicons 
+                name={connectionMode.icon} 
+                size={20} 
+                color={connectionMode.color}
+                accessible={false}
+              />
+              <Text style={[styles.modeText, { color: connectionMode.color }]}>
+                {connectionMode.text}
+              </Text>
+            </View>
+          )}
+
           <View style={styles.infoRow}>
             <View 
               style={styles.infoItem}
@@ -144,6 +196,19 @@ const styles = StyleSheet.create({
   },
   content: {
     gap: spacing.md,
+  },
+  modeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: 8,
+    marginBottom: spacing.sm,
+  },
+  modeText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
   },
   infoRow: {
     flexDirection: 'row',

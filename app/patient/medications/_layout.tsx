@@ -10,7 +10,6 @@ export default function MedicationsLayout() {
       <Stack.Screen
         name="index"
         options={{
-          title: 'Medicamentos',
           headerLeft: () => (
             <Link href="/patient/home" asChild>
               <Pressable 
@@ -40,11 +39,10 @@ export default function MedicationsLayout() {
       <Stack.Screen
         name="add"
         options={{
-          title: 'Añadir Medicamento',
           headerShown: false,
         }}
       />
-      <Stack.Screen name="[id]" options={{ title: 'Editar Medicamento' }} />
+      <Stack.Screen name="[id]" />
     </Stack>
   );
 }

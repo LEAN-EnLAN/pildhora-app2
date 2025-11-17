@@ -295,7 +295,7 @@ function CaregiverDashboardContent() {
   if (initializationError && !usingCachedData && cachedPatients.length === 0) {
     const categorized = categorizeError(initializationError);
     return (
-      <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
+      <SafeAreaView edges={['bottom']} style={styles.container}>
         <Container style={styles.container}>
           <ErrorState
             category={categorized.category}
@@ -313,7 +313,7 @@ function CaregiverDashboardContent() {
   if (patientsError && !usingCachedData && cachedPatients.length === 0) {
     const categorized = categorizeError(patientsError);
     return (
-      <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
+      <SafeAreaView edges={['bottom']} style={styles.container}>
         <Container style={styles.container}>
           <ErrorState
             category={categorized.category}
@@ -329,7 +329,7 @@ function CaregiverDashboardContent() {
    * Render main dashboard
    */
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
+    <SafeAreaView edges={['bottom']} style={styles.container}>
       <Container style={styles.container}>
         {/* Offline Indicator */}
         <OfflineIndicator />

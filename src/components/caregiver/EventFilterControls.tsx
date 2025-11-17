@@ -43,29 +43,34 @@ export const EventFilterControls: React.FC<EventFilterControlsProps> = ({
 
   /**
    * Load saved filters from AsyncStorage on mount
+   * DISABLED: This was causing infinite refresh loops because loading filters
+   * on mount triggers filter changes, which regenerate cache keys with new Date
+   * object references, causing the SWR hook to refetch continuously.
+   * 
+   * Users can manually set filters each session, which is acceptable UX.
    */
-  useEffect(() => {
-    const loadFilters = async () => {
-      try {
-        const savedFilters = await AsyncStorage.getItem(FILTERS_STORAGE_KEY);
-        if (savedFilters) {
-          const parsed = JSON.parse(savedFilters);
-          // Convert date strings back to Date objects
-          if (parsed.dateRange) {
-            parsed.dateRange = {
-              start: new Date(parsed.dateRange.start),
-              end: new Date(parsed.dateRange.end),
-            };
-          }
-          onFiltersChange(parsed);
-        }
-      } catch (error) {
-        console.error('[EventFilterControls] Error loading filters:', error);
-      }
-    };
+  // useEffect(() => {
+  //   const loadFilters = async () => {
+  //     try {
+  //       const savedFilters = await AsyncStorage.getItem(FILTERS_STORAGE_KEY);
+  //       if (savedFilters) {
+  //         const parsed = JSON.parse(savedFilters);
+  //         // Convert date strings back to Date objects
+  //         if (parsed.dateRange) {
+  //           parsed.dateRange = {
+  //             start: new Date(parsed.dateRange.start),
+  //             end: new Date(parsed.dateRange.end),
+  //           };
+  //         }
+  //         onFiltersChange(parsed);
+  //       }
+  //     } catch (error) {
+  //       console.error('[EventFilterControls] Error loading filters:', error);
+  //     }
+  //   };
 
-    loadFilters();
-  }, []); // Only run on mount
+  //   loadFilters();
+  // }, []); // Only run on mount
 
   /**
    * Save filters to AsyncStorage whenever they change

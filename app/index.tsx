@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
-import { Text, View, TouchableOpacity, ActivityIndicator, Image, StyleSheet, Platform } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Text, View, TouchableOpacity, ActivityIndicator, Image, StyleSheet, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../src/store';
 import { checkAuthState } from '../src/store/slices/authSlice';
+import { getPostAuthRoute } from '../src/services/routing';
 
 // Avoid React Native Web generating boxShadow CSS by removing shadow props on web
 const commonShadow = Platform.select({
@@ -101,6 +102,7 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { user, isAuthenticated, loading, initializing } = useSelector((state: RootState) => state.auth);
+  const [isRouting, setIsRouting] = useState(false);
 
   useEffect(() => {
     // Check if user is already authenticated
@@ -109,21 +111,27 @@ export default function WelcomeScreen() {
 
   useEffect(() => {
     // Redirect based on auth state only after initialization is complete
-    if (!initializing && !loading) {
-      console.log('[Index] Auth state check:', { isAuthenticated, user: user?.id, role: user?.role });
-      // TEMP: disable automatic redirect for debugging
-      // if (isAuthenticated && user) {
-      //   if (user.role === 'patient') {
-      //     console.log('[Index] Redirecting to patient home');
-      //     router.replace('/patient/home');
-      //   } else {
-      //     console.log('[Index] Redirecting to caregiver dashboard');
-      //     router.replace('/caregiver/dashboard');
-      //   }
-      // } else {
-      //   console.log('[Index] User not authenticated, staying at root');
-      // }
-    }
+    const handleRouting = async () => {
+      if (!initializing && !loading) {
+        console.log('[Index] Auth state check:', { isAuthenticated, user: user?.id, role: user?.role });
+        if (isAuthenticated && user) {
+          setIsRouting(true);
+          try {
+            const route = await getPostAuthRoute(user);
+            console.log('[Index] Routing to:', route);
+            router.replace(route);
+          } catch (error: any) {
+            console.error('[Index] Routing error:', error);
+            Alert.alert('Error de navegación', error.userMessage || 'No se pudo determinar la ruta.');
+            setIsRouting(false);
+          }
+        } else {
+          console.log('[Index] User not authenticated, staying at root');
+        }
+      }
+    };
+
+    handleRouting();
   }, [isAuthenticated, user, loading, initializing, router]);
 
   const handleRoleSelect = (role: 'patient' | 'caregiver') => {
@@ -135,11 +143,13 @@ export default function WelcomeScreen() {
     router.push('/auth/login');
   };
 
-  if (loading || initializing) {
+  if (loading || initializing || isRouting) {
     return (
       <SafeAreaView edges={['top','bottom']} style={styles.container}>
         <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Cargando...</Text>
+        <Text style={styles.loadingText}>
+          {isRouting ? 'Redirigiendo...' : 'Cargando...'}
+        </Text>
       </SafeAreaView>
     );
   }

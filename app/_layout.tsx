@@ -152,6 +152,12 @@ export default function RootLayout() {
                 animation: 'slide_from_bottom',
               }}
             />
+            <Stack.Screen 
+              name="patient"
+            />
+            <Stack.Screen 
+              name="caregiver"
+            />
           </Stack>
         </SafeAreaProvider>
       </PersistGate>

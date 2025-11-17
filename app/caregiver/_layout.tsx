@@ -1,14 +1,12 @@
 import { Tabs, useRouter, usePathname } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '../../src/store';
 import { logout } from '../../src/store/slices/authSlice';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, StyleSheet, View, ActivityIndicator } from 'react-native';
 import { CaregiverHeader } from '../../src/components/caregiver';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { getDbInstance } from '../../src/services/firebase';
-import { colors, spacing, typography, shadows } from '../../src/theme/tokens';
+import { colors, spacing, typography, shadows, borderRadius } from '../../src/theme/tokens';
 import { useNavigationPersistence } from '../../src/hooks/useNavigationPersistence';
 
 export default function CaregiverLayout() {
@@ -16,8 +14,6 @@ export default function CaregiverLayout() {
   const pathname = usePathname();
   const dispatch = useDispatch<AppDispatch>();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
-  const [checkedPatients, setCheckedPatients] = useState(false);
-  const [hasPatients, setHasPatients] = useState<boolean>(true);
   
   // Navigation persistence and deep linking (temporarily disabled for debugging)
   const { isReady: isNavigationReady } = useNavigationPersistence({
@@ -26,39 +22,20 @@ export default function CaregiverLayout() {
     handleDeepLinks: false,
   });
 
-  // Temporarily disable automatic auth-based redirect to avoid nav loops while debugging
-  // useEffect(() => {
-  //   if (!isAuthenticated || user?.role !== 'caregiver') {
-  //     router.replace('/');
-  //   }
-  // }, [isAuthenticated, user?.role]);
-
   useEffect(() => {
-    const checkPatients = async () => {
-      if (!user?.id) return;
-      try {
-        const db = await getDbInstance();
-        if (!db) {
-          setHasPatients(false);
-          setCheckedPatients(true);
-          return;
-        }
-        const q = query(
-          collection(db, 'users'),
-          where('role', '==', 'patient'),
-          where('caregiverId', '==', user.id)
-        );
-        const snap = await getDocs(q);
-        const any = !snap.empty;
-        setHasPatients(any);
-        setCheckedPatients(true);
-      } catch {
-        setHasPatients(false);
-        setCheckedPatients(true);
+    // Role guard: only allow caregivers to access caregiver screens
+    // Add a small delay to allow logout to complete properly
+    const timer = setTimeout(() => {
+      if (!isAuthenticated || user?.role !== 'caregiver') {
+        console.log('[CaregiverLayout] Redirecting - Auth:', isAuthenticated, 'Role:', user?.role);
+        router.replace('/');
       }
-    };
-    checkPatients();
-  }, [user?.id, pathname]);
+    }, 300); // Delay to allow logout to complete
+
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, user?.role, router]);
+
+
 
   const handleLogout = async () => {
     await dispatch(logout());
@@ -70,7 +47,7 @@ export default function CaregiverLayout() {
     const titles: Record<string, string> = {
       dashboard: 'Inicio',
       tasks: 'Tareas',
-      medications: 'Medicamentos',
+      'device-connection': 'Pacientes y Dispositivos',
       events: 'Eventos',
       'add-device': 'Vincular Dispositivo',
     };
@@ -79,7 +56,7 @@ export default function CaregiverLayout() {
 
   // Check if current route should hide tabs (modal screens)
   const shouldHideTabs = (): boolean => {
-    const modalRoutes = ['/caregiver/add-device', '/caregiver/events/'];
+    const modalRoutes = ['/caregiver/add-device', '/caregiver/events/', '/caregiver/medications/'];
     return modalRoutes.some(route => pathname.includes(route));
   };
 
@@ -94,19 +71,21 @@ export default function CaregiverLayout() {
 
   return (
     <>
-      {/* Single custom header for all caregiver screens */}
-      <CaregiverHeader
-        caregiverName={user?.name}
-        title={getScreenTitle(pathname.split('/').pop() || 'dashboard')}
-        showScreenTitle={pathname !== '/caregiver/dashboard'}
-        onLogout={handleLogout}
-      />
+      {/* Single custom header for all caregiver screens except add-device */}
+      {pathname !== '/caregiver/add-device' && (
+        <CaregiverHeader
+          caregiverName={user?.name}
+          title={getScreenTitle(pathname.split('/').pop() || 'dashboard')}
+          showScreenTitle={pathname !== '/caregiver/dashboard'}
+          onLogout={handleLogout}
+        />
+      )}
       
       <Tabs
         screenOptions={{
-          headerShown: false, // Disable default header for all screens
-          tabBarActiveTintColor: colors.primary[500],
-          tabBarInactiveTintColor: colors.gray[400],
+          headerShown: false,
+          tabBarActiveTintColor: colors.primary[600],
+          tabBarInactiveTintColor: colors.gray[500],
           tabBarStyle: [
             styles.tabBar,
             shouldHideTabs() && styles.tabBarHidden,
@@ -114,18 +93,21 @@ export default function CaregiverLayout() {
           tabBarLabelStyle: styles.tabBarLabel,
           tabBarIconStyle: styles.tabBarIcon,
           tabBarItemStyle: styles.tabBarItem,
-          tabBarAllowFontScaling: true,
+          tabBarAllowFontScaling: false,
           tabBarHideOnKeyboard: Platform.OS === 'android',
+          tabBarBackground: () => (
+            <View style={styles.tabBarBackground} />
+          ),
         }}
       >
         <Tabs.Screen
           name="dashboard"
           options={{
-            title: 'Inicio',
+            tabBarLabel: 'Inicio',
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons 
-                name={focused ? "home" : "home-outline"} 
-                size={focused ? size + 2 : size} 
+                name={focused ? 'home' : 'home-outline'} 
+                size={size} 
                 color={color} 
               />
             ),
@@ -135,11 +117,11 @@ export default function CaregiverLayout() {
         <Tabs.Screen
           name="tasks"
           options={{
-            title: 'Tareas',
+            tabBarLabel: 'Tareas',
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons 
-                name={focused ? "checkbox" : "checkbox-outline"} 
-                size={focused ? size + 2 : size} 
+                name={focused ? 'checkbox' : 'checkbox-outline'} 
+                size={size} 
                 color={color} 
               />
             ),
@@ -147,40 +129,50 @@ export default function CaregiverLayout() {
           }}
         />
         <Tabs.Screen
-          name="medications"
+          name="device-connection"
           options={{
-            title: 'Medicamentos',
+            tabBarLabel: 'Pacientes',
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons 
-                name={focused ? "medkit" : "medkit-outline"} 
-                size={focused ? size + 2 : size} 
+                name={focused ? 'people' : 'people-outline'} 
+                size={size} 
                 color={color} 
               />
             ),
-            tabBarAccessibilityLabel: 'Medicamentos - Gestionar medicamentos del paciente',
+            tabBarAccessibilityLabel: 'Pacientes - Gestionar pacientes y dispositivos vinculados',
           }}
         />
         <Tabs.Screen
           name="events"
           options={{
-            title: 'Eventos',
+            tabBarLabel: 'Eventos',
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons 
-                name={focused ? "notifications" : "notifications-outline"} 
-                size={focused ? size + 2 : size} 
+                name={focused ? 'notifications' : 'notifications-outline'} 
+                size={size} 
                 color={color} 
               />
             ),
             tabBarAccessibilityLabel: 'Eventos - Ver registro de eventos de medicamentos',
           }}
         />
-        {/* Modal screens - hidden from tab bar */}
+        {/* Modal screens and nested routes - hidden from tab bar */}
         <Tabs.Screen 
           name="add-device" 
           options={{ 
-            href: null, 
-            title: 'Vincular Dispositivo',
-            headerShown: false,
+            href: null,
+          }} 
+        />
+        <Tabs.Screen 
+          name="device-connection-confirm" 
+          options={{ 
+            href: null,
+          }} 
+        />
+        <Tabs.Screen 
+          name="medications" 
+          options={{ 
+            href: null,
           }} 
         />
       </Tabs>
@@ -196,28 +188,44 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   tabBar: {
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
+    paddingTop: spacing.md,
+    paddingBottom: Platform.OS === 'ios' ? spacing['2xl'] + spacing.sm : spacing.lg,
+    paddingHorizontal: spacing.md,
+    height: Platform.OS === 'ios' ? 90 : 72,
+    ...shadows.xl,
+    // Modern elevated effect
+    ...(Platform.OS === 'ios' && {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+    }),
+  },
+  tabBarBackground: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray[200],
-    paddingTop: spacing.sm,
-    paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.md,
-    height: Platform.OS === 'ios' ? 88 : 68,
-    ...shadows.sm,
+    borderTopLeftRadius: spacing['2xl'],
+    borderTopRightRadius: spacing['2xl'],
   },
   tabBarHidden: {
     display: 'none',
   },
   tabBarLabel: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.semibold,
-    marginTop: spacing.xs,
+    fontSize: typography.fontSize.xs - 1,
+    fontWeight: typography.fontWeight.bold,
+    marginTop: spacing.xs - 2,
     letterSpacing: 0.3,
   },
   tabBarIcon: {
-    marginBottom: -2,
+    marginBottom: 0,
   },
   tabBarItem: {
     paddingVertical: spacing.sm,
-    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    gap: spacing.xs - 2,
+    borderRadius: borderRadius.md,
+    marginHorizontal: spacing.xs - 2,
   },
 });

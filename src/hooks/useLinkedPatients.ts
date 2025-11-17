@@ -52,8 +52,15 @@ export function useLinkedPatients({
   const fetchLinkedPatients = useCallback(async () => {
     // Prevent repeated automatic fetches when nothing changed
     if (hasFetchedRef.current || !caregiverId || !enabled) {
+      console.log('[useLinkedPatients] Skipping fetch:', { 
+        hasFetched: hasFetchedRef.current, 
+        caregiverId: !!caregiverId, 
+        enabled 
+      });
       return;
     }
+
+    console.log('[useLinkedPatients] Starting fetch for caregiver:', caregiverId);
 
     try {
       // Step 1: Try to load from cache first for instant rendering (SWR pattern)
@@ -191,7 +198,9 @@ export function useLinkedPatients({
    * Manual refetch function
    */
   const refetch = useCallback(async () => {
+    console.log('[useLinkedPatients] Manual refetch triggered');
     hasFetchedRef.current = false;
+    setIsLoading(true);
     await fetchLinkedPatients();
   }, [fetchLinkedPatients]);
 

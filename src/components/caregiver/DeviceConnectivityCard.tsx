@@ -111,15 +111,15 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
   // Get battery color based on level
   const batteryColor = useMemo(() => {
     if (batteryLevel === null || batteryLevel === undefined) return colors.gray[400];
-    if (batteryLevel > 50) return colors.success;
-    if (batteryLevel > 20) return colors.warning['500'];
-    return colors.error['500'];
+    if (batteryLevel > 50) return colors.success[500];
+    if (batteryLevel > 20) return colors.warning[500];
+    return colors.error[500];
   }, [batteryLevel]);
 
   // Get status color
   const statusColor = useMemo(() => {
     if (!isOnline) return colors.gray[400];
-    return colors.success;
+    return colors.success[500];
   }, [isOnline]);
 
   // Format last seen timestamp
@@ -284,6 +284,12 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
     );
   }
 
+  // Get additional device state info
+  const currentStatus = deviceState?.current_status || 'N/D';
+  const wifiSignal = deviceState?.wifi_signal_strength;
+  const alarmMode = deviceState?.alarm_mode || 'N/D';
+  const ledIntensity = deviceState?.led_intensity;
+
   return (
     <Card 
       variant="elevated" 
@@ -291,68 +297,138 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
       style={style}
       accessibilityLabel={`Estado del dispositivo: ${statusLabel}, ${batteryLabel}`}
     >
-      <Text style={styles.title}>Conectividad del dispositivo</Text>
+      {/* Header with gradient-like effect */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>Conectividad del Dispositivo</Text>
+          <View style={[styles.statusBadge, { backgroundColor: isOnline ? colors.success[50] : colors.gray[100] }]}>
+            <View style={[styles.statusDot, { backgroundColor: isOnline ? colors.success[500] : colors.gray[400] }]} />
+            <Text style={[styles.statusBadgeText, { color: isOnline ? colors.success[700] : colors.gray[600] }]}>
+              {isOnline ? 'En línea' : 'Desconectado'}
+            </Text>
+          </View>
+        </View>
+      </View>
       
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-        {/* Device ID */}
-        <Text 
-          style={styles.deviceId}
-          accessible={true}
-          accessibilityLabel={`ID del dispositivo: ${deviceId}`}
-        >
-          ID: {deviceId}
-        </Text>
-
-        {/* Status and Battery Row */}
-        <View style={styles.infoRow}>
-          {/* Online/Offline Status */}
-          <View 
-            style={styles.infoItem}
+        {/* Device ID with icon */}
+        <View style={styles.deviceIdContainer}>
+          <Text style={styles.deviceIdLabel}>ID del Dispositivo</Text>
+          <Text 
+            style={styles.deviceIdValue}
             accessible={true}
-            accessibilityLabel={statusLabel}
+            accessibilityLabel={`ID del dispositivo: ${deviceId}`}
           >
-            <Text style={styles.label}>Estado</Text>
-            <View style={styles.valueContainer}>
-              <View 
-                style={[styles.statusIndicator, { backgroundColor: statusColor }]}
-                accessible={false}
-              />
-              <Text style={styles.value}>
-                {isOnline ? 'En línea' : 'Desconectado'}
+            {deviceId}
+          </Text>
+        </View>
+
+        {/* Main Status Grid */}
+        <View style={styles.statusGrid}>
+          {/* Battery Level */}
+          <View 
+            style={styles.statusCard}
+            accessible={true}
+            accessibilityLabel={batteryLabel}
+          >
+            <Text style={styles.statusCardLabel}>Batería</Text>
+            <View style={styles.statusCardValueContainer}>
+              <Text style={[styles.statusCardValue, { color: batteryColor }]}>
+                {batteryLevel !== null && batteryLevel !== undefined 
+                  ? `${batteryLevel}%` 
+                  : 'N/A'}
+              </Text>
+              <View style={[styles.batteryBar, { backgroundColor: colors.gray[200] }]}>
+                <View 
+                  style={[
+                    styles.batteryBarFill, 
+                    { 
+                      width: `${batteryLevel || 0}%`,
+                      backgroundColor: batteryColor 
+                    }
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* WiFi Signal */}
+          {wifiSignal !== null && wifiSignal !== undefined && (
+            <View 
+              style={styles.statusCard}
+              accessible={true}
+              accessibilityLabel={`Señal WiFi: ${wifiSignal} dBm`}
+            >
+              <Text style={styles.statusCardLabel}>WiFi</Text>
+              <View style={styles.statusCardValueContainer}>
+                <Text style={styles.statusCardValue}>
+                  {wifiSignal} dBm
+                </Text>
+                <Text style={styles.statusCardSubtext}>
+                  {wifiSignal > -50 ? 'Excelente' : wifiSignal > -70 ? 'Buena' : 'Débil'}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Current Status */}
+          <View 
+            style={styles.statusCard}
+            accessible={true}
+            accessibilityLabel={`Estado actual: ${currentStatus}`}
+          >
+            <Text style={styles.statusCardLabel}>Estado Actual</Text>
+            <View style={styles.statusCardValueContainer}>
+              <Text style={styles.statusCardValue} numberOfLines={2}>
+                {currentStatus}
               </Text>
             </View>
           </View>
 
-          {/* Battery Level */}
+          {/* Alarm Mode */}
           <View 
-            style={styles.infoItem}
+            style={styles.statusCard}
             accessible={true}
-            accessibilityLabel={batteryLabel}
+            accessibilityLabel={`Modo de alarma: ${alarmMode}`}
           >
-            <Text style={styles.label}>Batería</Text>
-            <View style={styles.valueContainer}>
-              <View 
-                style={[styles.batteryIndicator, { backgroundColor: batteryColor }]}
-                accessible={false}
-              />
-              <Text style={styles.value}>
-                {batteryLevel !== null && batteryLevel !== undefined 
-                  ? `${batteryLevel}%` 
-                  : 'N/A'}
+            <Text style={styles.statusCardLabel}>Modo Alarma</Text>
+            <View style={styles.statusCardValueContainer}>
+              <Text style={styles.statusCardValue}>
+                {alarmMode === 'both' ? '🔔 + 💡' : 
+                 alarmMode === 'sound' ? '🔔' : 
+                 alarmMode === 'led' ? '💡' : 
+                 alarmMode === 'off' ? 'Apagado' : 'N/D'}
               </Text>
             </View>
           </View>
         </View>
 
+        {/* LED Intensity (if available) */}
+        {ledIntensity !== null && ledIntensity !== undefined && (
+          <View style={styles.ledIntensityContainer}>
+            <Text style={styles.ledIntensityLabel}>Intensidad LED: {Math.round((ledIntensity / 1023) * 100)}%</Text>
+            <View style={styles.ledIntensityBar}>
+              <View 
+                style={[
+                  styles.ledIntensityBarFill, 
+                  { width: `${(ledIntensity / 1023) * 100}%` }
+                ]}
+              />
+            </View>
+          </View>
+        )}
+
         {/* Last Seen (only when offline) */}
         {!isOnline && lastSeenText && (
-          <Text 
-            style={styles.lastSeen}
-            accessible={true}
-            accessibilityLabel={`Visto por última vez ${lastSeenText}`}
-          >
-            Visto por última vez: {lastSeenText}
-          </Text>
+          <View style={styles.lastSeenContainer}>
+            <Text 
+              style={styles.lastSeen}
+              accessible={true}
+              accessibilityLabel={`Visto por última vez ${lastSeenText}`}
+            >
+              ⏱️ Visto por última vez: {lastSeenText}
+            </Text>
+          </View>
         )}
 
         {/* Action Buttons */}
@@ -391,63 +467,148 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
 });
 
 const styles = StyleSheet.create({
-  title: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.gray[900],
+  header: {
+    backgroundColor: colors.primary[50],
+    marginHorizontal: -spacing.lg,
+    marginTop: -spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     marginBottom: spacing.lg,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary[100],
   },
-  content: {
-    gap: spacing.md,
-  },
-  deviceId: {
-    fontSize: typography.fontSize.sm,
-    color: colors.gray[500],
-    marginBottom: spacing.sm,
-  },
-  infoRow: {
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: spacing.lg,
+    alignItems: 'center',
   },
-  infoItem: {
-    flex: 1,
+  title: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[900],
   },
-  label: {
-    fontSize: typography.fontSize.sm,
-    color: colors.gray[600],
-    marginBottom: spacing.xs,
-  },
-  valueContainer: {
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 12,
+    gap: spacing.xs,
   },
-  statusIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  batteryIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  statusBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  value: {
-    fontSize: typography.fontSize.lg,
+  content: {
+    gap: spacing.lg,
+  },
+  deviceIdContainer: {
+    backgroundColor: colors.gray[50],
+    padding: spacing.md,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary[500],
+  },
+  deviceIdLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.gray[600],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
+  },
+  deviceIdValue: {
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
     color: colors.gray[900],
+    fontFamily: 'monospace',
+  },
+  statusGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  statusCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+  },
+  statusCardLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.gray[600],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
+  statusCardValueContainer: {
+    gap: spacing.xs,
+  },
+  statusCardValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[900],
+  },
+  statusCardSubtext: {
+    fontSize: typography.fontSize.xs,
+    color: colors.gray[500],
+  },
+  batteryBar: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginTop: spacing.xs,
+  },
+  batteryBarFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  ledIntensityContainer: {
+    backgroundColor: colors.gray[50],
+    padding: spacing.md,
+    borderRadius: 8,
+  },
+  ledIntensityLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[700],
+    marginBottom: spacing.sm,
+  },
+  ledIntensityBar: {
+    height: 6,
+    backgroundColor: colors.gray[200],
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  ledIntensityBarFill: {
+    height: '100%',
+    backgroundColor: colors.primary[500],
+    borderRadius: 3,
+  },
+  lastSeenContainer: {
+    backgroundColor: colors.warning[50],
+    padding: spacing.md,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning[500],
   },
   lastSeen: {
     fontSize: typography.fontSize.sm,
-    color: colors.gray[500],
-    fontStyle: 'italic',
-    marginTop: spacing.xs,
+    color: colors.warning[600],
+    fontWeight: typography.fontWeight.medium,
   },
   buttonContainer: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   actionButton: {
     flex: 1,

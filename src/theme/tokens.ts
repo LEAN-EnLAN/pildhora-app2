@@ -8,31 +8,52 @@
 /**
  * Color Palette
  * Provides primary, semantic, neutral, and surface colors
+ * Enhanced with gradient support and modern color scales
  */
 export const colors = {
-  // Primary palette
+  // Primary palette - Modern blue with depth
   primary: {
-    50: '#E6F0FF',
-    100: '#CCE1FF',
-    500: '#007AFF',  // Main primary
-    600: '#0066CC',
-    700: '#0052A3',
+    50: '#EFF6FF',
+    100: '#DBEAFE',
+    200: '#BFDBFE',
+    300: '#93C5FD',
+    400: '#60A5FA',
+    500: '#3B82F6',  // Main primary - vibrant blue
+    600: '#2563EB',
+    700: '#1D4ED8',
+    800: '#1E40AF',
+    900: '#1E3A8A',
   },
   
-  // Semantic colors
-  success: '#34C759',
+  // Semantic colors with depth
+  success: {
+    50: '#F0FDF4',
+    100: '#DCFCE7',
+    500: '#22C55E',  // Main success
+    600: '#16A34A',
+    700: '#15803D',
+  },
   warning: {
-    50: '#FFF7ED',
-    200: '#FED7AA',
-    500: '#FF9500',
+    50: '#FFFBEB',
+    100: '#FEF3C7',
+    200: '#FDE68A',
+    500: '#F59E0B',  // Main warning
+    600: '#D97706',
   },
   error: {
     50: '#FEF2F2',
-    500: '#FF3B30',
+    100: '#FEE2E2',
+    500: '#EF4444',  // Main error
+    600: '#DC2626',
+    700: '#B91C1C',
   },
-  info: '#5856D6',
+  info: {
+    50: '#EEF2FF',
+    500: '#6366F1',  // Main info
+    600: '#4F46E5',
+  },
   
-  // Neutral palette
+  // Neutral palette - Refined grays
   gray: {
     50: '#F9FAFB',
     100: '#F3F4F6',
@@ -44,12 +65,22 @@ export const colors = {
     700: '#374151',
     800: '#1F2937',
     900: '#111827',
+    950: '#030712',
   },
   
-  // Surface colors
-  background: '#F2F2F7',
+  // Surface colors with elevation
+  background: '#F8FAFC',
   surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
+  surfaceHover: '#F8FAFC',
+  
+  // Gradient colors
+  gradients: {
+    primary: ['#3B82F6', '#2563EB'],
+    success: ['#22C55E', '#16A34A'],
+    sunset: ['#F59E0B', '#EF4444'],
+    ocean: ['#3B82F6', '#6366F1'],
+  },
 };
 
 /**
@@ -109,28 +140,60 @@ export const borderRadius = {
 /**
  * Shadow Definitions
  * Elevation shadows for cards and elevated surfaces
+ * Enhanced with more depth and modern shadow styles
  */
 export const shadows = {
+  xs: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
   sm: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
   },
   md: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.12,
     shadowRadius: 8,
     elevation: 4,
   },
   lg: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.16,
     shadowRadius: 16,
     elevation: 8,
+  },
+  xl: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.20,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  // Colored shadows for special effects
+  colored: {
+    primary: {
+      shadowColor: '#3B82F6',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    success: {
+      shadowColor: '#22C55E',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 12,
+      elevation: 4,
+    },
   },
 };
 

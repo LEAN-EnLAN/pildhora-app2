@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { RootState } from '../../src/store';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { linkDeviceToUser, unlinkDeviceFromUser } from '../../src/services/deviceLinking';
@@ -12,18 +13,18 @@ import { Button, Input, Card, LoadingSpinner, ErrorMessage, SuccessMessage, Anim
 import { DeviceConfigPanel } from '../../src/components/shared/DeviceConfigPanel';
 import { useLinkedPatients } from '../../src/hooks/useLinkedPatients';
 import { useDeviceState } from '../../src/hooks/useDeviceState';
-import { colors, spacing, typography, borderRadius } from '../../src/theme/tokens';
+import { colors, spacing, typography, shadows } from '../../src/theme/tokens';
 import { PatientWithDevice } from '../../src/types';
-
-interface LinkedDeviceInfo {
-  deviceId: string;
-  patient: PatientWithDevice | null;
-  isLoading: boolean;
-}
 
 export default function DeviceManagementScreen() {
   const router = useRouter();
   const userId = useSelector((state: RootState) => state.auth.user?.id);
+
+  // Handle back navigation with haptics
+  const handleGoBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/caregiver/dashboard');
+  }, [router]);
   
   const [deviceId, setDeviceId] = useState('');
   const [validationError, setValidationError] = useState<string>('');
@@ -283,8 +284,23 @@ export default function DeviceManagementScreen() {
   };
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
-<ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+    <SafeAreaView edges={['top']} style={styles.container}>
+      {/* Back Button Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={handleGoBack}
+          accessibilityLabel="Volver al tablero"
+          accessibilityHint="Regresa al tablero principal del cuidador"
+          accessibilityRole="button"
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.gray[900]} />
+          <Text style={styles.backButtonText}>Tablero</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Gestión de Dispositivos</Text>
+      </View>
+
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Success/Error Messages */}
         {successMessage && (
           <View style={styles.messageContainer}>
@@ -506,8 +522,13 @@ const DeviceConfigPanelWrapper: React.FC<{
             ledColor: { r: 255, g: 255, b: 255 },
           });
         }
-      } catch (error) {
-        console.error('[DeviceConfigPanelWrapper] Error fetching config:', error);
+      } catch (error: any) {
+        // Handle permission errors gracefully (expected when caregiver has no device link)
+        if (error?.code === 'permission-denied') {
+          console.log('[DeviceConfigPanelWrapper] No permission to read device config - using defaults');
+        } else {
+          console.error('[DeviceConfigPanelWrapper] Error fetching config:', error);
+        }
         // Set default config on error
         setConfig({
           alarmMode: 'both',
@@ -542,6 +563,32 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  header: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+    ...shadows.sm,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.sm,
+    minHeight: 44,
+  },
+  backButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.gray[900],
+  },
+  headerTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[900],
   },
   scrollView: {
     flex: 1,

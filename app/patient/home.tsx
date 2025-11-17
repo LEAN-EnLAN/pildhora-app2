@@ -307,7 +307,7 @@ export default function PatientHome() {
   }, [router]);
 
   const handleMiDispositivo = useCallback(() => {
-    router.push('/patient/link-device');
+    router.push('/patient/device-settings');
   }, [router]);
 
   const handleUnlinkDevice = useCallback(async () => {
@@ -459,19 +459,55 @@ export default function PatientHome() {
   }, [upcoming, patientId]);
 
   const deviceStatus = useMemo(() => {
+    type DeviceStatusType = 'idle' | 'dispensing' | 'error' | 'offline' | 'pending';
+
     if (!deviceSlice?.state) {
       return {
         deviceId: activeDeviceId,
         batteryLevel: null,
-        status: 'offline' as const,
+        status: 'offline' as DeviceStatusType,
         isOnline: false,
       };
     }
+
+    const rawStatus = deviceSlice.state.current_status;
+    const isOnline = !!deviceSlice.state.is_online;
+
+    let normalizedStatus: DeviceStatusType = 'offline';
+
+    if (!isOnline) {
+      normalizedStatus = 'offline';
+    } else {
+      switch (rawStatus) {
+        case 'PENDING':
+        case 'pending':
+          normalizedStatus = 'pending';
+          break;
+        case 'dispensing':
+        case 'DISPENSING':
+          normalizedStatus = 'dispensing';
+          break;
+        case 'error':
+        case 'ERROR':
+        case 'ALARM_SOUNDING':
+        case 'alarm_active':
+          normalizedStatus = 'error';
+          break;
+        case 'idle':
+        case 'IDLE':
+        case 'DOSE_TAKEN':
+        case 'DOSE_MISSED':
+        default:
+          normalizedStatus = 'idle';
+          break;
+      }
+    }
+
     return {
       deviceId: activeDeviceId,
       batteryLevel: deviceSlice.state.battery_level,
-      status: deviceSlice.state.current_status || 'idle' as const,
-      isOnline: deviceSlice.state.is_online || false,
+      status: normalizedStatus,
+      isOnline,
     };
   }, [deviceSlice, activeDeviceId]);
 
@@ -756,7 +792,7 @@ export default function PatientHome() {
 
                   <TouchableOpacity 
                     style={styles.quickActionCard}
-                    onPress={() => router.push('/patient/link-device')}
+                    onPress={() => router.push('/patient/device-settings')}
                     accessibilityLabel="Dispositivo"
                     accessibilityHint="Gestiona tu dispositivo Pillbox"
                     accessibilityRole="button"

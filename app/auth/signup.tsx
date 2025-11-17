@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Text, View, Alert, KeyboardAvoidingView, Platform, StyleSheet, ScrollView } from 'react-native';
+import { Text, View, Alert, KeyboardAvoidingView, Platform, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -7,6 +7,7 @@ import { signUp, signInWithGoogle } from '../../src/store/slices/authSlice';
 import { RootState, AppDispatch } from '../../src/store';
 import { Button, Card, Container, AppIcon } from '../../src/components/ui';
 import { PHTextField } from '../../src/components/ui/PHTextField';
+import { getPostAuthRoute } from '../../src/services/routing';
 
 export default function SignupScreen() {
   const [name, setName] = useState('');
@@ -14,6 +15,7 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<'patient' | 'caregiver'>('patient');
+  const [isRouting, setIsRouting] = useState(false);
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { loading, isAuthenticated, user, initializing } = useSelector((state: RootState) => state.auth);
@@ -26,13 +28,21 @@ export default function SignupScreen() {
   }, [params.role]);
 
   useEffect(() => {
-    if (!initializing && isAuthenticated && user) {
-      if (user.role === 'patient') {
-        router.replace('/patient/home');
-      } else {
-        router.replace('/caregiver/dashboard');
+    const handleRouting = async () => {
+      if (!initializing && isAuthenticated && user) {
+        setIsRouting(true);
+        try {
+          const route = await getPostAuthRoute(user);
+          router.replace(route);
+        } catch (error: any) {
+          console.error('[SignupScreen] Routing error:', error);
+          Alert.alert('Error de navegación', error.userMessage || 'No se pudo determinar la ruta.');
+          setIsRouting(false);
+        }
       }
-    }
+    };
+
+    handleRouting();
   }, [isAuthenticated, user, initializing, router]);
 
   const handleSignup = async () => {
@@ -48,30 +58,33 @@ export default function SignupScreen() {
       Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
       return;
     }
-    if (loading) return;
+    if (loading || isRouting) return;
     if (isAuthenticated && user) {
-      if (user.role === 'patient') {
-        router.replace('/patient/home');
-      } else {
-        router.replace('/caregiver/dashboard');
+      setIsRouting(true);
+      try {
+        const route = await getPostAuthRoute(user);
+        router.replace(route);
+      } catch (error: any) {
+        console.error('[SignupScreen] Routing error:', error);
+        Alert.alert('Error de navegación', error.userMessage || 'No se pudo determinar la ruta.');
+        setIsRouting(false);
       }
       return;
     }
     try {
+      setIsRouting(true);
       const result = await dispatch(signUp({ email, password, name, role })).unwrap();
+      const route = await getPostAuthRoute(result);
       Alert.alert('Éxito', '¡Cuenta creada exitosamente!', [
         {
           text: 'Aceptar',
           onPress: () => {
-            if (result.role === 'patient') {
-              router.replace('/patient/home');
-            } else {
-              router.replace('/caregiver/dashboard');
-            }
+            router.replace(route);
           },
         },
       ]);
     } catch (error) {
+      setIsRouting(false);
       Alert.alert('Error de registro', error as string);
     }
   };
@@ -81,26 +94,38 @@ export default function SignupScreen() {
   };
 
   const handleGoogleSignup = async () => {
-    if (loading) return;
+    if (loading || isRouting) return;
     try {
+      setIsRouting(true);
       const result = await dispatch(signInWithGoogle({ role })).unwrap();
+      const route = await getPostAuthRoute(result);
       Alert.alert('Éxito', '¡Cuenta creada exitosamente con Google!', [
         {
           text: 'Aceptar',
           onPress: () => {
-            if (result.role === 'patient') {
-              router.replace('/patient/home');
-            } else {
-              router.replace('/caregiver/dashboard');
-            }
+            router.replace(route);
           },
         },
       ]);
     } catch (error: any) {
+      setIsRouting(false);
       const message = typeof error === 'string' ? error : (error?.message || 'Error desconocido');
       Alert.alert('Error de Google', message);
     }
   };
+
+  if (isRouting) {
+    return (
+      <SafeAreaView edges={['top','bottom']} style={styles.flex1}>
+        <Container style={styles.flex1}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3B82F6" />
+            <Text style={styles.loadingText}>Redirigiendo...</Text>
+          </View>
+        </Container>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['top','bottom']} style={styles.flex1}>
@@ -184,17 +209,17 @@ export default function SignupScreen() {
 
           <Button
             onPress={handleSignup}
-            disabled={loading}
+            disabled={loading || isRouting}
             variant="primary"
             size="lg"
             style={styles.signupButton}
           >
-            {loading ? 'Creando cuenta...' : 'Registrarse'}
+            {loading || isRouting ? 'Creando cuenta...' : 'Registrarse'}
           </Button>
 
           <Button
             onPress={handleGoogleSignup}
-            disabled={loading}
+            disabled={loading || isRouting}
             variant="secondary"
             size="lg"
             style={[styles.signupButton, styles.googleButton]}
@@ -348,5 +373,15 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 0,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
   },
 });

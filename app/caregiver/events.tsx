@@ -32,6 +32,7 @@ import { categorizeError } from '../../src/utils/errorHandling';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 import { buildEventQuery, applyClientSideSearch } from '../../src/utils/eventQueryBuilder';
 import { useCollectionSWR } from '../../src/hooks/useCollectionSWR';
+import { useLinkedPatients } from '../../src/hooks/useLinkedPatients';
 
 // Pagination: Limit events per page for better performance
 const EVENTS_PER_PAGE = 50;
@@ -43,10 +44,15 @@ function MedicationEventRegistryContent() {
   const router = useRouter();
   const { user } = useSelector((state: RootState) => state.auth);
   
-  const [patients, setPatients] = useState<Patient[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [filters, setFilters] = useState<EventFilters>({});
   const [isOnline, setIsOnline] = useState(true);
+
+  // Fetch linked patients using the proper hook
+  const { patients, isLoading: patientsLoading } = useLinkedPatients({
+    caregiverId: user?.id || null,
+    enabled: !!user?.id,
+  });
 
   /**
    * Cache key for SWR pattern
@@ -76,6 +82,14 @@ function MedicationEventRegistryContent() {
       return;
     }
 
+    // Don't query events if caregiver has no linked patients
+    // This prevents permission errors when caregiver hasn't completed onboarding
+    if (patients.length === 0) {
+      console.log('[Events] No linked patients - skipping query');
+      setResolvedQuery(null);
+      return;
+    }
+
     const fetchQuery = async () => {
       const db = await getDbInstance();
       if (!db) {
@@ -83,7 +97,7 @@ function MedicationEventRegistryContent() {
         return;
       }
 
-      const query = await buildEventQuery(
+      const query = buildEventQuery(
         db,
         user.id,
         {
@@ -98,7 +112,7 @@ function MedicationEventRegistryContent() {
     };
 
     fetchQuery();
-  }, [user?.id, filters.patientId, filters.eventType, filters.dateRange]);
+  }, [user?.id, patients.length, filters.patientId, filters.eventType, filters.dateRange]);
 
   // Always call useCollectionSWR to maintain hook order
   // Pass null query when not ready - the hook will handle this gracefully
@@ -145,49 +159,9 @@ function MedicationEventRegistryContent() {
 
 
   /**
-   * Load patients for filter dropdown
+   * Patients are now loaded via useLinkedPatients hook
+   * This properly queries deviceLinks collection instead of non-existent patients collection
    */
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const loadPatients = async () => {
-      try {
-        const db = await getDbInstance();
-        if (!db) return;
-
-        const patientsQuery = query(
-          collection(db, 'patients'),
-          where('caregiverId', '==', user.id)
-        );
-
-        const unsubscribe = onSnapshot(patientsQuery, (snapshot) => {
-          const patientData: Patient[] = [];
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            patientData.push({
-              id: doc.id,
-              name: data.name,
-              email: data.email,
-              caregiverId: data.caregiverId,
-              createdAt: data.createdAt instanceof Timestamp
-                ? data.createdAt.toDate().toISOString()
-                : data.createdAt,
-              deviceId: data.deviceId,
-              adherence: data.adherence,
-              lastTaken: data.lastTaken,
-            });
-          });
-          setPatients(patientData);
-        });
-
-        return unsubscribe;
-      } catch (error) {
-        console.error('[MedicationEventRegistry] Error loading patients:', error);
-      }
-    };
-
-    loadPatients();
-  }, [user?.id]);
 
 
 

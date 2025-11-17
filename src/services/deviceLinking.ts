@@ -296,18 +296,22 @@ export async function linkDeviceToUser(userId: string, deviceId: string): Promis
     });
     
     if (existingLink.exists() && existingLink.data()?.status === 'active') {
-      throw new DeviceLinkingError(
-        'Device already linked to this user',
-        'ALREADY_LINKED',
-        'Este dispositivo ya está vinculado a tu cuenta.',
-        false
-      );
+      console.log('[DeviceLinking] Device link already exists and is active, skipping creation');
+      // Link already exists and is active - this is fine, just ensure RTDB is synced
+      const deviceRef = ref(rdb, `users/${userId}/devices/${deviceId}`);
+      await retryOperation(async () => {
+        console.log('[DeviceLinking] Ensuring RTDB sync:', `users/${userId}/devices/${deviceId}`);
+        await set(deviceRef, true);
+      });
+      console.log('[DeviceLinking] Device linking verified successfully (already linked)');
+      return; // Exit early - link already exists
     }
     
     // Create deviceLink document in Firestore
     await retryOperation(async () => {
       console.log('[DeviceLinking] Creating deviceLink document:', deviceLinkId);
       await setDoc(deviceLinkRef, {
+        id: deviceLinkId,
         deviceId: deviceId,
         userId: userId,
         role: userRole,
@@ -318,14 +322,19 @@ export async function linkDeviceToUser(userId: string, deviceId: string): Promis
       console.log('[DeviceLinking] Successfully created deviceLink document');
     });
     
-    // Update RTDB users/{uid}/devices node
-    const deviceRef = ref(rdb, `users/${userId}/devices/${deviceId}`);
-    
-    await retryOperation(async () => {
-      console.log('[DeviceLinking] Writing to RTDB:', `users/${userId}/devices/${deviceId}`);
-      await set(deviceRef, true);
-      console.log('[DeviceLinking] Successfully wrote device link to RTDB');
-    });
+    // Update RTDB users/{uid}/devices node (only for patients)
+    // Caregivers don't need RTDB entries as they access devices through deviceLinks
+    if (userRole === 'patient') {
+      const deviceRef = ref(rdb, `users/${userId}/devices/${deviceId}`);
+      
+      await retryOperation(async () => {
+        console.log('[DeviceLinking] Writing to RTDB:', `users/${userId}/devices/${deviceId}`);
+        await set(deviceRef, true);
+        console.log('[DeviceLinking] Successfully wrote device link to RTDB');
+      });
+    } else {
+      console.log('[DeviceLinking] Skipping RTDB write for caregiver (not needed)');
+    }
     
     console.log('[DeviceLinking] Device linking completed successfully');
   } catch (error: any) {
