@@ -122,7 +122,7 @@ export function VerificationStep() {
             <ActivityIndicator size="large" color={colors.primary[500]} />
           )}
           {verificationState === 'success' && (
-            <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+            <Ionicons name="checkmark-circle" size={48} color={colors.success[500]} />
           )}
           {verificationState === 'error' && (
             <Ionicons name="alert-circle" size={48} color={colors.error[500]} />
@@ -188,7 +188,7 @@ export function VerificationStep() {
           <View style={styles.divider} />
 
           <View style={styles.successMessage}>
-            <Ionicons name="shield-checkmark-outline" size={20} color={colors.success} />
+            <Ionicons name="shield-checkmark-outline" size={20} color={colors.success[500]} />
             <Text style={styles.successMessageText}>Dispositivo seguro y vinculado</Text>
           </View>
         </View>
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
   },
   successMessageText: {
     fontSize: typography.fontSize.sm,
-    color: colors.success,
+    color: colors.success[500],
     fontWeight: typography.fontWeight.medium,
   },
   errorDisplay: {

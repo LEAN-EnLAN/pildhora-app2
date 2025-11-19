@@ -6,9 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { RootState } from '../../src/store';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { linkDeviceToUser, unlinkDeviceFromUser } from '../../src/services/deviceLinking';
+import { unlinkDeviceFromUser } from '../../src/services/deviceLinking';
 import { getDbInstance } from '../../src/services/firebase';
-import { Button, Input, Card, LoadingSpinner, ErrorMessage, SuccessMessage, AnimatedListItem, Collapsible } from '../../src/components/ui';
+import { Button, Card, LoadingSpinner, ErrorMessage, SuccessMessage, AnimatedListItem, Collapsible } from '../../src/components/ui';
 import { DeviceConfigPanel } from '../../src/components/shared/DeviceConfigPanel';
 import { ScreenWrapper } from '../../src/components/caregiver';
 import { useScrollViewPadding } from '../../src/hooks/useScrollViewPadding';
@@ -29,9 +29,7 @@ export default function DeviceManagementScreen() {
     router.push('/caregiver/dashboard');
   }, [router]);
 
-  const [deviceId, setDeviceId] = useState('');
-  const [validationError, setValidationError] = useState<string>('');
-  const [linking, setLinking] = useState(false);
+
   const [unlinkingDevice, setUnlinkingDevice] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -44,78 +42,7 @@ export default function DeviceManagementScreen() {
     enabled: !!userId,
   });
 
-  // Validate device ID (minimum 5 characters as per requirements)
-  const validateDeviceId = useCallback((id: string): boolean => {
-    if (!id.trim()) {
-      setValidationError('El Device ID es requerido');
-      return false;
-    }
-    if (id.trim().length < 5) {
-      setValidationError('El Device ID debe tener al menos 5 caracteres');
-      return false;
-    }
-    setValidationError('');
-    return true;
-  }, []);
 
-  const handleDeviceIdChange = useCallback((text: string) => {
-    setDeviceId(text);
-    if (text.trim()) {
-      validateDeviceId(text);
-    } else {
-      setValidationError('');
-    }
-  }, [validateDeviceId]);
-
-  // Handle device linking
-  const handleLink = useCallback(async () => {
-    if (!userId) {
-      setErrorMessage('Debes iniciar sesión para vincular un dispositivo');
-      return;
-    }
-
-    if (!validateDeviceId(deviceId)) {
-      return;
-    }
-
-    setLinking(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    try {
-      const db = await getDbInstance();
-      if (!db) {
-        throw new Error('No se pudo conectar a la base de datos');
-      }
-
-      // Check if device exists, create if not
-      const deviceRef = doc(db, 'devices', deviceId.trim());
-      const snap = await getDoc(deviceRef);
-      if (!snap.exists()) {
-        await setDoc(deviceRef, {
-          linkedUsers: [userId],
-          metadata: { model: 'ESP8266', notes: 'Dispositivo vinculado por cuidador' },
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }, { merge: true });
-      }
-
-      // Link device to caregiver
-      await linkDeviceToUser(userId, deviceId.trim());
-
-      setSuccessMessage('Dispositivo vinculado exitosamente');
-      setDeviceId('');
-      setValidationError('');
-
-      // Refresh linked devices list
-      await refetch();
-    } catch (error: any) {
-      console.error('[DeviceManagement] Error linking device:', error);
-      setErrorMessage(error.userMessage || error.message || 'No se pudo vincular el dispositivo');
-    } finally {
-      setLinking(false);
-    }
-  }, [userId, deviceId, validateDeviceId, refetch]);
 
   // Handle device unlinking with confirmation
   const handleUnlink = useCallback(async (deviceIdToUnlink: string, patientName?: string) => {
@@ -238,7 +165,7 @@ export default function DeviceManagementScreen() {
                 <Text style={styles.patientName}>Paciente: {patientName}</Text>
               ) : (
                 <View style={styles.waitingBadge}>
-                  <Ionicons name="time-outline" size={14} color={colors.warning[700]} />
+                  <Ionicons name="time-outline" size={14} color={colors.warning[600]} />
                   <Text style={styles.waitingText}>Esperando vinculación de paciente</Text>
                 </View>
               )}
@@ -349,34 +276,18 @@ export default function DeviceManagementScreen() {
             </View>
 
             <Text style={styles.sectionDescription}>
-              Ingresa el ID del dispositivo para conectarlo a un paciente
+              Para vincular un nuevo dispositivo, necesitas un código de invitación del paciente.
             </Text>
 
-            <View style={styles.inputContainer}>
-              <Input
-                label="Device ID"
-                placeholder="Ejemplo: esp8266-ABC123"
-                value={deviceId}
-                onChangeText={handleDeviceIdChange}
-                error={validationError}
-                helperText="Identificador único del dispositivo (mínimo 5 caracteres)"
-                autoCapitalize="none"
-                leftIcon={<Ionicons name="qr-code-outline" size={20} color={colors.gray[400]} />}
-                required
-              />
-            </View>
-
             <Button
-              onPress={handleLink}
+              onPress={() => router.push('/caregiver/device-connection')}
               variant="primary"
               size="lg"
               fullWidth
-              loading={linking}
-              disabled={!deviceId.trim() || !!validationError || linking}
-              accessibilityLabel="Vincular dispositivo"
-              leftIcon={<Ionicons name="link" size={20} color="#FFFFFF" />}
+              accessibilityLabel="Vincular con código"
+              leftIcon={<Ionicons name="qr-code-outline" size={20} color="#FFFFFF" />}
             >
-              Vincular Dispositivo
+              Ingresar Código de Invitación
             </Button>
           </Card>
         </View>
@@ -628,9 +539,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
   },
-  inputContainer: {
-    marginBottom: spacing.lg,
-  },
+
   devicesList: {
     gap: spacing.md,
   },
@@ -669,7 +578,7 @@ const styles = StyleSheet.create({
   },
   waitingText: {
     fontSize: typography.fontSize.xs,
-    color: colors.warning[700],
+    color: colors.warning[600],
     fontWeight: typography.fontWeight.medium,
   },
   statusSection: {

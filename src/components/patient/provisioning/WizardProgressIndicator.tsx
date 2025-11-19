@@ -224,8 +224,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   stepCircleCompleted: {
-    backgroundColor: colors.success,
-    borderColor: colors.success,
+    backgroundColor: colors.success[500],
+    borderColor: colors.success[500],
   },
   stepCircleCurrent: {
     backgroundColor: '#3B82F6', // primary[500]
@@ -284,6 +284,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   connectionLineCompleted: {
-    backgroundColor: colors.success,
+    backgroundColor: colors.success[500],
   },
 });

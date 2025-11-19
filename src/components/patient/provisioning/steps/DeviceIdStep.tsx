@@ -207,7 +207,7 @@ export function DeviceIdStep() {
 
           {!validationError && !isChecking && deviceId.length >= 5 && (
             <View style={styles.successContainer}>
-              <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+              <Ionicons name="checkmark-circle" size={20} color={colors.success[500]} />
               <Text style={styles.successText}>ID válido y disponible</Text>
             </View>
           )}
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   successText: {
     flex: 1,
     fontSize: typography.fontSize.sm,
-    color: colors.success,
+    color: colors.success[500],
     fontWeight: typography.fontWeight.medium,
   },
   helpSection: {

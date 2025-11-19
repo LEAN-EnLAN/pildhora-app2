@@ -22,7 +22,7 @@
  * />
  */
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -36,6 +36,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme/tokens';
 import { PatientWithDevice } from '../../types';
+import { useDeviceState } from '../../hooks/useDeviceState';
 
 // AsyncStorage key for persisting selected patient
 const SELECTED_PATIENT_KEY = '@caregiver_selected_patient_id';
@@ -87,11 +88,11 @@ export default function PatientSelector({
   const loadLastSelectedPatient = async () => {
     try {
       const savedPatientId = await AsyncStorage.getItem(SELECTED_PATIENT_KEY);
-      
+
       if (savedPatientId && patients.length > 0) {
         // Check if the saved patient ID exists in current patients list
         const patientExists = patients.some(p => p.id === savedPatientId);
-        
+
         if (patientExists && savedPatientId !== selectedPatientId) {
           onSelectPatient(savedPatientId);
         } else if (!patientExists && patients.length > 0 && !selectedPatientId) {
@@ -129,42 +130,16 @@ export default function PatientSelector({
     if (patientId === selectedPatientId) {
       return; // Already selected
     }
-    
+
     // Save to AsyncStorage (non-blocking)
     saveSelectedPatient(patientId);
-    
+
     // Update selection immediately for smooth transition
     onSelectPatient(patientId);
-    
+
     // Note: We don't trigger onRefresh here to prevent reloading
     // The dashboard will handle data fetching based on selectedPatientId change
   }, [selectedPatientId, onSelectPatient]);
-
-  /**
-   * Get device status indicator color
-   */
-  const getDeviceStatusColor = (patient: PatientWithDevice): string => {
-    if (!patient.deviceId || !patient.deviceState) {
-      return colors.gray[400]; // No device
-    }
-    
-    return patient.deviceState.is_online ? colors.success[500] : colors.gray[400];
-  };
-
-  /**
-   * Get device status text
-   */
-  const getDeviceStatusText = (patient: PatientWithDevice): string => {
-    if (!patient.deviceId) {
-      return 'Sin dispositivo';
-    }
-    
-    if (!patient.deviceState) {
-      return 'Estado desconocido';
-    }
-    
-    return patient.deviceState.is_online ? 'En línea' : 'Desconectado';
-  };
 
   /**
    * Render empty state
@@ -203,7 +178,7 @@ export default function PatientSelector({
       ]}
     >
       <Text style={styles.label}>Pacientes</Text>
-      
+
       <ScrollView
         ref={scrollViewRef}
         horizontal
@@ -216,16 +191,12 @@ export default function PatientSelector({
       >
         {patients.map((patient, index) => {
           const isSelected = patient.id === selectedPatientId;
-          const statusColor = getDeviceStatusColor(patient);
-          const statusText = getDeviceStatusText(patient);
 
           return (
             <PatientChip
               key={patient.id}
               patient={patient}
               isSelected={isSelected}
-              statusColor={statusColor}
-              statusText={statusText}
               onPress={() => handlePatientPress(patient.id)}
               isFirst={index === 0}
               isLast={index === patients.length - 1}
@@ -244,8 +215,6 @@ export default function PatientSelector({
 interface PatientChipProps {
   patient: PatientWithDevice;
   isSelected: boolean;
-  statusColor: string;
-  statusText: string;
   onPress: () => void;
   isFirst: boolean;
   isLast: boolean;
@@ -254,13 +223,51 @@ interface PatientChipProps {
 function PatientChip({
   patient,
   isSelected,
-  statusColor,
-  statusText,
   onPress,
   isFirst,
   isLast,
 }: PatientChipProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  // Fetch real-time device state
+  const { deviceState } = useDeviceState({
+    deviceId: patient.deviceId,
+    enabled: !!patient.deviceId
+  });
+
+  // Determine status color based on real-time state or fallback to patient data
+  const statusColor = useMemo(() => {
+    if (!patient.deviceId) return colors.gray[400];
+
+    // Use real-time state if available
+    if (deviceState) {
+      return deviceState.is_online ? colors.success[500] : colors.gray[400];
+    }
+
+    // Fallback to passed patient data
+    if (patient.deviceState) {
+      return patient.deviceState.is_online ? colors.success[500] : colors.gray[400];
+    }
+
+    return colors.gray[400];
+  }, [patient.deviceId, patient.deviceState, deviceState]);
+
+  // Determine status text
+  const statusText = useMemo(() => {
+    if (!patient.deviceId) return 'Sin dispositivo';
+
+    // Use real-time state if available
+    if (deviceState) {
+      return deviceState.is_online ? 'En línea' : 'Desconectado';
+    }
+
+    // Fallback to passed patient data
+    if (patient.deviceState) {
+      return patient.deviceState.is_online ? 'En línea' : 'Desconectado';
+    }
+
+    return 'Estado desconocido';
+  }, [patient.deviceId, patient.deviceState, deviceState]);
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -317,7 +324,7 @@ function PatientChip({
             >
               {patient.name}
             </Text>
-            
+
             {/* Device status indicator */}
             <View
               style={[
@@ -328,7 +335,7 @@ function PatientChip({
               accessibilityLabel={`Device status: ${statusText}`}
             />
           </View>
-          
+
           {/* Device status text */}
           <Text
             style={[

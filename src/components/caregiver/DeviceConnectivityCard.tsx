@@ -4,12 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { colors, spacing, typography } from '../../theme/tokens';
-import { getRdbInstance, getDbInstance } from '../../services/firebase';
-import { ref, onValue } from 'firebase/database';
+import { getDbInstance } from '../../services/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { getRelativeTimeString } from '../../utils/dateUtils';
-import { DeviceState, DeviceConnectivityCardProps } from '../../types';
+import { DeviceConnectivityCardProps } from '../../types';
 import { unlinkDeviceFromUser } from '../../services/deviceLinking';
+import { useDeviceState } from '../../hooks/useDeviceState';
 
 export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = React.memo(({
   deviceId,
@@ -18,86 +18,32 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
   onDeviceUnlinked,
   style
 }) => {
-  const [deviceState, setDeviceState] = useState<DeviceState | null>(null);
+  // Use custom hook for real-time device state
+  const {
+    deviceState,
+    isLoading: deviceLoading,
+    error: deviceError
+  } = useDeviceState({
+    deviceId,
+    enabled: !!deviceId
+  });
+
   const [deviceConfig, setDeviceConfig] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const [unlinking, setUnlinking] = useState<boolean>(false);
-  
+
   // Fade-in animation for content
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Set up RTDB listener for device state
+  // Trigger animation when data loads
   useEffect(() => {
-    if (!deviceId) {
-      setLoading(false);
-      setDeviceState(null);
-      setError(null);
-      return;
+    if (!deviceLoading && deviceState) {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
     }
-
-    let rtdbUnsubscribe: (() => void) | null = null;
-    let mounted = true;
-
-    const setupListener = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Clear previous device state when switching devices
-        setDeviceState(null);
-
-        const rtdb = await getRdbInstance();
-        if (!rtdb) {
-          throw new Error('Firebase Realtime Database not initialized');
-        }
-
-        const deviceRef = ref(rtdb, `devices/${deviceId}/state`);
-        
-        rtdbUnsubscribe = onValue(
-          deviceRef,
-          (snapshot) => {
-            if (!mounted) return;
-            
-            const data = snapshot.val() as DeviceState | null;
-            setDeviceState(data);
-            setLoading(false);
-            setError(null);
-            
-            // Fade in content when data loads
-            Animated.timing(fadeAnim, {
-              toValue: 1,
-              duration: 300,
-              useNativeDriver: true,
-            }).start();
-          },
-          (err) => {
-            if (!mounted) return;
-            
-            console.error('[DeviceConnectivityCard] RTDB listener error:', err);
-            setError('Error al conectar con el dispositivo');
-            setLoading(false);
-          }
-        );
-      } catch (err: any) {
-        if (!mounted) return;
-        
-        console.error('[DeviceConnectivityCard] Setup error:', err);
-        setError(err.message || 'Error al inicializar');
-        setLoading(false);
-      }
-    };
-
-    setupListener();
-
-    // Cleanup listener on unmount or device change
-    return () => {
-      mounted = false;
-      if (rtdbUnsubscribe) {
-        rtdbUnsubscribe();
-      }
-    };
-  }, [deviceId, fadeAnim]);
+  }, [deviceLoading, deviceState, fadeAnim]);
 
   // Set up Firestore listener for device configuration
   useEffect(() => {
@@ -118,12 +64,12 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
         }
 
         const deviceDocRef = doc(db, 'devices', deviceId);
-        
+
         firestoreUnsubscribe = onSnapshot(
           deviceDocRef,
           (snapshot) => {
             if (!mounted) return;
-            
+
             if (snapshot.exists()) {
               const data = snapshot.data();
               setDeviceConfig(data?.desiredConfig || null);
@@ -185,7 +131,7 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
   // Format last seen timestamp
   const lastSeenText = useMemo(() => {
     if (!deviceState?.last_seen) return null;
-    
+
     try {
       const lastSeenDate = new Date(deviceState.last_seen);
       return getRelativeTimeString(lastSeenDate);
@@ -245,9 +191,9 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
             try {
               setUnlinking(true);
               console.log('[DeviceConnectivityCard] Unlinking device:', deviceId, 'from patient:', patientId);
-              
+
               await unlinkDeviceFromUser(patientId, deviceId);
-              
+
               Alert.alert(
                 'Éxito',
                 'El dispositivo ha sido desenlazado exitosamente',
@@ -279,11 +225,11 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
   }, [deviceId, patientId, onDeviceUnlinked]);
 
   // Render loading state
-  if (loading) {
+  if (deviceLoading) {
     return (
-      <Card 
-        variant="elevated" 
-        padding="lg" 
+      <Card
+        variant="elevated"
+        padding="lg"
         style={style}
         accessibilityLabel="Cargando estado del dispositivo"
       >
@@ -297,17 +243,17 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
   }
 
   // Render error state
-  if (error) {
+  if (deviceError) {
     return (
-      <Card 
-        variant="elevated" 
-        padding="lg" 
+      <Card
+        variant="elevated"
+        padding="lg"
         style={style}
-        accessibilityLabel={`Error: ${error}`}
+        accessibilityLabel={`Error: ${deviceError.message}`}
       >
         <Text style={styles.title}>Conectividad del dispositivo</Text>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorText}>{deviceError.message || 'Error al conectar con el dispositivo'}</Text>
         </View>
       </Card>
     );
@@ -316,9 +262,9 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
   // Render no device state
   if (!deviceId) {
     return (
-      <Card 
-        variant="elevated" 
-        padding="lg" 
+      <Card
+        variant="elevated"
+        padding="lg"
         style={style}
         accessibilityLabel="No hay dispositivo vinculado"
       >
@@ -353,8 +299,8 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
   const ledIntensity = deviceConfig?.led_intensity ?? deviceState?.led_intensity;
 
   return (
-    <Card 
-      variant="elevated" 
+    <Card
+      variant="elevated"
       padding="none"
       style={style}
       accessibilityLabel={`Estado del dispositivo: ${statusLabel}, ${batteryLabel}`}
@@ -379,12 +325,12 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
           </View>
         </View>
       </View>
-      
+
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
         {/* Device ID with icon */}
         <View style={styles.deviceIdContainer}>
           <Text style={styles.deviceIdLabel}>ID del Dispositivo</Text>
-          <Text 
+          <Text
             style={styles.deviceIdValue}
             accessible={true}
             accessibilityLabel={`ID del dispositivo: ${deviceId}`}
@@ -396,7 +342,7 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
         {/* Main Status Grid */}
         <View style={styles.statusGrid}>
           {/* Battery Level */}
-          <View 
+          <View
             style={styles.statusCard}
             accessible={true}
             accessibilityLabel={batteryLabel}
@@ -404,17 +350,17 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
             <Text style={styles.statusCardLabel}>Batería</Text>
             <View style={styles.statusCardValueContainer}>
               <Text style={[styles.statusCardValue, { color: batteryColor }]}>
-                {batteryLevel !== null && batteryLevel !== undefined 
-                  ? `${batteryLevel}%` 
+                {batteryLevel !== null && batteryLevel !== undefined
+                  ? `${batteryLevel}%`
                   : 'N/A'}
               </Text>
               <View style={[styles.batteryBar, { backgroundColor: colors.gray[200] }]}>
-                <View 
+                <View
                   style={[
-                    styles.batteryBarFill, 
-                    { 
+                    styles.batteryBarFill,
+                    {
                       width: `${batteryLevel || 0}%`,
-                      backgroundColor: batteryColor 
+                      backgroundColor: batteryColor
                     }
                   ]}
                 />
@@ -424,7 +370,7 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
 
           {/* WiFi Signal */}
           {wifiSignal !== null && wifiSignal !== undefined && (
-            <View 
+            <View
               style={styles.statusCard}
               accessible={true}
               accessibilityLabel={`Señal WiFi: ${wifiSignal} dBm`}
@@ -442,7 +388,7 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
           )}
 
           {/* Current Status */}
-          <View 
+          <View
             style={styles.statusCard}
             accessible={true}
             accessibilityLabel={`Estado actual: ${currentStatus}`}
@@ -456,7 +402,7 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
           </View>
 
           {/* Alarm Mode */}
-          <View 
+          <View
             style={styles.statusCard}
             accessible={true}
             accessibilityLabel={`Modo de alarma: ${alarmMode}`}
@@ -464,10 +410,10 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
             <Text style={styles.statusCardLabel}>Modo Alarma</Text>
             <View style={styles.statusCardValueContainer}>
               <Text style={styles.statusCardValue}>
-                {alarmMode === 'both' ? '🔔 + 💡' : 
-                 alarmMode === 'sound' ? '🔔' : 
-                 alarmMode === 'led' ? '💡' : 
-                 alarmMode === 'off' ? 'Apagado' : 'N/D'}
+                {alarmMode === 'both' ? '🔔 + 💡' :
+                  alarmMode === 'sound' ? '🔔' :
+                    alarmMode === 'led' ? '💡' :
+                      alarmMode === 'off' ? 'Apagado' : 'N/D'}
               </Text>
             </View>
           </View>
@@ -478,9 +424,9 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
           <View style={styles.ledIntensityContainer}>
             <Text style={styles.ledIntensityLabel}>Intensidad LED: {Math.round((ledIntensity / 1023) * 100)}%</Text>
             <View style={styles.ledIntensityBar}>
-              <View 
+              <View
                 style={[
-                  styles.ledIntensityBarFill, 
+                  styles.ledIntensityBarFill,
                   { width: `${(ledIntensity / 1023) * 100}%` }
                 ]}
               />
@@ -491,7 +437,7 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
         {/* Last Seen (only when offline) */}
         {!isOnline && lastSeenText && (
           <View style={styles.lastSeenContainer}>
-            <Text 
+            <Text
               style={styles.lastSeen}
               accessible={true}
               accessibilityLabel={`Visto por última vez ${lastSeenText}`}
@@ -515,7 +461,7 @@ export const DeviceConnectivityCard: React.FC<DeviceConnectivityCardProps> = Rea
               Gestionar
             </Button>
           )}
-          
+
           {patientId && (
             <Button
               variant="danger"
