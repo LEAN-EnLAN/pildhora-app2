@@ -1,5 +1,6 @@
 import { getRdbInstance } from './firebase';
 import { ref, set, get } from 'firebase/database';
+import { triggerTopo, triggerBuzzer } from './deviceCommands';
 
 /**
  * Device action types that can be triggered by caregivers
@@ -43,25 +44,51 @@ interface DeviceActionRequest {
  */
 export class DeviceActionsService {
   /**
-   * Trigger a test alarm on the device
+   * Trigger a test alarm on the device (buzzer)
    * 
    * @param deviceId - Device identifier
    * @param userId - User ID triggering the action (caregiver)
    * @returns Action result
    */
   async triggerTestAlarm(deviceId: string, userId: string): Promise<DeviceActionResult> {
-    return this.triggerAction(deviceId, 'test_alarm', userId);
+    try {
+      console.log('[DeviceActionsService] Triggering test alarm (buzzer):', { deviceId, userId });
+      await triggerBuzzer(deviceId, true);
+      return {
+        success: true,
+        message: 'Alarma de prueba activada en el dispositivo',
+      };
+    } catch (error: any) {
+      console.error('[DeviceActionsService] Error triggering test alarm:', error);
+      return {
+        success: false,
+        message: error.userMessage || 'Error al activar la alarma de prueba',
+      };
+    }
   }
 
   /**
-   * Trigger manual dose dispensing
+   * Trigger manual dose dispensing (TOPO sequence)
    * 
    * @param deviceId - Device identifier
    * @param userId - User ID triggering the action (caregiver)
    * @returns Action result
    */
   async dispenseManualDose(deviceId: string, userId: string): Promise<DeviceActionResult> {
-    return this.triggerAction(deviceId, 'dispense_dose', userId);
+    try {
+      console.log('[DeviceActionsService] Triggering TOPO (dispense dose):', { deviceId, userId });
+      await triggerTopo(deviceId);
+      return {
+        success: true,
+        message: 'Secuencia de dispensación iniciada en el dispositivo',
+      };
+    } catch (error: any) {
+      console.error('[DeviceActionsService] Error triggering TOPO:', error);
+      return {
+        success: false,
+        message: error.userMessage || 'Error al iniciar la dispensación',
+      };
+    }
   }
 
   /**
@@ -87,14 +114,27 @@ export class DeviceActionsService {
   }
 
   /**
-   * Clear active alarm on device
+   * Clear active alarm on device (reset all commands)
    * 
    * @param deviceId - Device identifier
    * @param userId - User ID triggering the action (caregiver)
    * @returns Action result
    */
   async clearAlarm(deviceId: string, userId: string): Promise<DeviceActionResult> {
-    return this.triggerAction(deviceId, 'clear_alarm', userId);
+    try {
+      console.log('[DeviceActionsService] Clearing alarm (reset commands):', deviceId);
+      await clearDeviceCommands(deviceId);
+      return {
+        success: true,
+        message: 'Alarma silenciada correctamente',
+      };
+    } catch (error: any) {
+      console.error('[DeviceActionsService] Error clearing alarm:', error);
+      return {
+        success: false,
+        message: error.userMessage || 'Error al silenciar la alarma',
+      };
+    }
   }
 
   /**
@@ -150,7 +190,7 @@ export class DeviceActionsService {
       }
 
       // Generate action ID
-      const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const actionId = `action_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
       // Create action request
       const actionRequest: DeviceActionRequest = {

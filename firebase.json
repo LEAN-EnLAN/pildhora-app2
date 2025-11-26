@@ -27,9 +27,12 @@
       "functions"
     ]
   },
-  "database": {
-    "rules": "database.rules.json"
-  },
+  "database": [
+    {
+      "rules": "database.rules.json",
+      "target": "devices"
+    }
+  ],
   "emulators": {
     "firestore": {
       "port": 8080

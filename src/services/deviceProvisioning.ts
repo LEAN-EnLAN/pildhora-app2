@@ -1,192 +1,362 @@
-import {
-    doc,
-    getDoc,
-    setDoc,
-    updateDoc,
-    serverTimestamp,
-    collection,
-    addDoc
-} from 'firebase/firestore';
-import { getDbInstance, getRdbInstance } from './firebase';
+import { getAuthInstance, getDbInstance, getRdbInstance } from './firebase';
+import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { ref, set } from 'firebase/database';
+import { linkDeviceToUser } from './deviceLinking';
 
-// Test Device IDs that bypass backend validation
-const TEST_DEVICE_IDS = ['TEST-DEVICE-001', 'TEST-DEVICE-002', 'PILDHORA-TEST-01'];
-
-export interface ProvisioningData {
-    deviceId: string;
-    userId: string;
-    wifiSSID?: string;
-    wifiPassword?: string;
-    alarmMode: 'sound' | 'vibrate' | 'both' | 'silent';
-    ledIntensity: number;
-    ledColor: string;
-    volume: number;
+export class DeviceProvisioningError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public userMessage: string,
+    public retryable: boolean = false
+  ) {
+    super(message);
+    this.name = 'DeviceProvisioningError';
+  }
 }
 
-/**
- * Check if a device exists in the database
- */
-export const checkDeviceExists = async (deviceId: string): Promise<boolean> => {
-    // Always return true for test devices
-    if (TEST_DEVICE_IDS.includes(deviceId)) {
-        return true;
-    }
+export interface DeviceProvisioningData {
+  deviceId: string;
+  userId: string;
+  wifiSSID?: string;
+  wifiPassword?: string;
+  alarmMode: 'sound' | 'vibrate' | 'both' | 'silent';
+  ledIntensity: number;
+  ledColor: string;
+  volume: number;
+}
 
+function validateDeviceId(deviceId: string): void {
+  if (!deviceId || typeof deviceId !== 'string') {
+    throw new DeviceProvisioningError(
+      'Invalid device ID',
+      'INVALID_DEVICE_ID',
+      'El ID del dispositivo no es válido.',
+      false
+    );
+  }
+
+  if (deviceId.trim().length < 5) {
+    throw new DeviceProvisioningError(
+      'Device ID too short',
+      'DEVICE_ID_TOO_SHORT',
+      'El ID del dispositivo debe tener al menos 5 caracteres.',
+      false
+    );
+  }
+
+  if (!/^[a-zA-Z0-9_-]+$/.test(deviceId)) {
+    throw new DeviceProvisioningError(
+      'Invalid device ID format',
+      'INVALID_DEVICE_ID_FORMAT',
+      'El ID del dispositivo solo puede contener letras, números, guiones y guiones bajos.',
+      false
+    );
+  }
+}
+
+function validateUserId(userId: string): void {
+  if (!userId || typeof userId !== 'string') {
+    throw new DeviceProvisioningError(
+      'Invalid user ID',
+      'INVALID_USER_ID',
+      'Error de autenticación.',
+      false
+    );
+  }
+}
+
+async function validateAuthentication(userId: string): Promise<void> {
+  const auth = await getAuthInstance();
+  
+  if (!auth || !auth.currentUser) {
+    throw new DeviceProvisioningError(
+      'Not authenticated',
+      'NOT_AUTHENTICATED',
+      'No has iniciado sesión.',
+      false
+    );
+  }
+
+  if (auth.currentUser.uid !== userId) {
+    throw new DeviceProvisioningError(
+      'User ID mismatch',
+      'USER_ID_MISMATCH',
+      'Error de autenticación.',
+      false
+    );
+  }
+}
+
+async function retryOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  delayMs: number = 1000
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-        const db = await getDbInstance();
-        if (!db) throw new Error('Database connection failed');
-
-        const deviceRef = doc(db, 'devices', deviceId);
-        const deviceDoc = await getDoc(deviceRef);
-
-        return deviceDoc.exists();
-    } catch (error) {
-        console.error('[DeviceProvisioning] Error checking device existence:', error);
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      
+      if (error instanceof DeviceProvisioningError && !error.retryable) {
         throw error;
-    }
-};
-
-/**
- * Provision a device for a user
- */
-export const provisionDevice = async (data: ProvisioningData): Promise<void> => {
-    try {
-        const db = await getDbInstance();
-        const rdb = await getRdbInstance();
-
-        if (!db || !rdb) throw new Error('Database connection failed');
-
-        const { deviceId, userId } = data;
-
-        // Handle Test Devices
-        if (TEST_DEVICE_IDS.includes(deviceId)) {
-            await provisionTestDevice(db, rdb, data);
-            return;
-        }
-
-        // 1. Verify device is not already claimed
-        const deviceRef = doc(db, 'devices', deviceId);
-        const deviceDoc = await getDoc(deviceRef);
-
-        if (!deviceDoc.exists()) {
-            throw { code: 'DEVICE_NOT_FOUND', message: 'Device not found' };
-        }
-
-        const deviceData = deviceDoc.data();
-        if (deviceData.primaryPatientId && deviceData.primaryPatientId !== userId) {
-            throw { code: 'DEVICE_ALREADY_CLAIMED', message: 'Device already claimed by another user' };
-        }
-
-        // 2. Update Device Document in Firestore
-        await updateDoc(deviceRef, {
-            primaryPatientId: userId,
-            status: 'active',
-            lastProvisionedAt: serverTimestamp(),
-            wifiConfigured: !!data.wifiSSID,
-            settings: {
-                alarmMode: data.alarmMode,
-                ledIntensity: data.ledIntensity,
-                ledColor: data.ledColor,
-                volume: data.volume,
-            }
-        });
-
-        // 3. Create/Update User's Device Link
-        // This depends on your data model. Assuming users have a 'devices' subcollection or array.
-        // Here we'll add it to a 'patient_devices' collection for mapping
-        const patientDeviceRef = doc(db, 'users', userId, 'devices', deviceId);
-        await setDoc(patientDeviceRef, {
-            deviceId: deviceId,
-            role: 'admin', // The provisioner becomes the admin
-            addedAt: serverTimestamp(),
-            name: 'Mi Pildhora', // Default name
-        });
-
-        // 4. Update Realtime Database Config
-        const rdbConfigRef = ref(rdb, `devices/${deviceId}/config`);
-        await set(rdbConfigRef, {
-            wifi_ssid: data.wifiSSID || '',
-            wifi_password: data.wifiPassword || '',
-            alarm_mode: data.alarmMode === 'silent' ? 'off' : (data.alarmMode === 'vibrate' ? 'led' : data.alarmMode),
-            led_intensity: Math.round((data.ledIntensity / 100) * 1023),
-            led_color: hexToRgb(data.ledColor),
-            volume: data.volume,
-            updated_at: Date.now(),
-            provisioned: true,
-            owner_id: userId
-        });
-
-    } catch (error) {
-        console.error('[DeviceProvisioning] Error provisioning device:', error);
+      }
+      
+      const retryableCodes = ['unavailable', 'deadline-exceeded', 'resource-exhausted', 'aborted'];
+      const isRetryable = retryableCodes.includes(error.code);
+      
+      if (!isRetryable || attempt === maxRetries) {
         throw error;
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, delayMs * attempt));
     }
-};
+  }
+  
+  throw lastError;
+}
 
-/**
- * Helper to provision a test device
- */
-const provisionTestDevice = async (db: any, rdb: any, data: ProvisioningData) => {
-    const { deviceId, userId } = data;
+function handleFirebaseError(error: any, operation: string): never {
+  console.error(`[DeviceProvisioning] ${operation} failed:`, error);
 
-    console.log(`[DeviceProvisioning] Provisioning TEST DEVICE: ${deviceId}`);
+  if (error instanceof DeviceProvisioningError) {
+    throw error;
+  }
 
-    // Create dummy device doc if it doesn't exist
-    const deviceRef = doc(db, 'devices', deviceId);
-    await setDoc(deviceRef, {
-        serialNumber: deviceId,
-        model: 'Pildhora Test Unit',
-        status: 'active',
-        primaryPatientId: userId,
-        isTestDevice: true,
+  switch (error.code) {
+    case 'permission-denied':
+      throw new DeviceProvisioningError(
+        'Permission denied',
+        'PERMISSION_DENIED',
+        'No tienes permiso para configurar este dispositivo.',
+        false
+      );
+    
+    case 'unavailable':
+      throw new DeviceProvisioningError(
+        'Service unavailable',
+        'SERVICE_UNAVAILABLE',
+        'El servicio no está disponible. Verifica tu conexión.',
+        true
+      );
+    
+    case 'already-exists':
+      throw new DeviceProvisioningError(
+        'Device already exists',
+        'DEVICE_ALREADY_EXISTS',
+        'Este dispositivo ya está configurado.',
+        false
+      );
+    
+    default:
+      throw new DeviceProvisioningError(
+        'Unknown error',
+        'UNKNOWN_ERROR',
+        'Ocurrió un error inesperado.',
+        true
+      );
+  }
+}
+
+export async function checkDeviceExists(deviceId: string): Promise<boolean> {
+  try {
+    validateDeviceId(deviceId);
+    
+    const db = await getDbInstance();
+    if (!db) {
+      throw new DeviceProvisioningError(
+        'Firestore not initialized',
+        'FIRESTORE_NOT_INITIALIZED',
+        'Error de conexión.',
+        true
+      );
+    }
+    
+    const deviceDoc = await retryOperation(async () => {
+      const docRef = doc(db, 'devices', deviceId);
+      return await getDoc(docRef);
+    });
+    
+    return deviceDoc.exists();
+    
+  } catch (error: any) {
+    handleFirebaseError(error, 'checkDeviceExists');
+  }
+}
+
+export async function provisionDevice(data: DeviceProvisioningData): Promise<void> {
+  console.log('[DeviceProvisioning] Starting provisioning');
+  
+  try {
+    validateDeviceId(data.deviceId);
+    validateUserId(data.userId);
+    await validateAuthentication(data.userId);
+    
+    const db = await getDbInstance();
+    const rdb = await getRdbInstance();
+    
+    if (!db || !rdb) {
+      throw new DeviceProvisioningError(
+        'Firebase not initialized',
+        'FIREBASE_NOT_INITIALIZED',
+        'Error de conexión.',
+        true
+      );
+    }
+    
+    const deviceExists = await checkDeviceExists(data.deviceId);
+    
+    if (deviceExists) {
+      const deviceDoc = await retryOperation(async () => {
+        return await getDoc(doc(db, 'devices', data.deviceId));
+      });
+      
+      const deviceData = deviceDoc.data();
+      
+      if (deviceData?.primaryPatientId === data.userId) {
+        await updateDeviceConfiguration(data);
+        return;
+      }
+      
+      throw new DeviceProvisioningError(
+        'Device already claimed',
+        'DEVICE_ALREADY_CLAIMED',
+        'Este dispositivo ya está vinculado a otro usuario.',
+        false
+      );
+    }
+    
+    await retryOperation(async () => {
+      await setDoc(doc(db, 'devices', data.deviceId), {
+        id: data.deviceId,
+        primaryPatientId: data.userId,
+        provisioningStatus: 'active',
+        provisionedAt: serverTimestamp(),
+        provisionedBy: data.userId,
+        wifiConfigured: !!(data.wifiSSID && data.wifiPassword),
         createdAt: serverTimestamp(),
-        lastProvisionedAt: serverTimestamp(),
-        settings: {
-            alarmMode: data.alarmMode,
-            ledIntensity: data.ledIntensity,
-            ledColor: data.ledColor,
-            volume: data.volume,
+        updatedAt: serverTimestamp(),
+        linkedUsers: {
+          [data.userId]: {
+            role: 'patient',
+            linkedAt: serverTimestamp()
+          }
         }
+      });
+    });
+    
+    await retryOperation(async () => {
+      await setDoc(doc(db, 'deviceConfigs', data.deviceId), {
+        deviceId: data.deviceId,
+        userId: data.userId,
+        alarmMode: data.alarmMode,
+        ledIntensity: data.ledIntensity,
+        ledColor: data.ledColor,
+        volume: data.volume,
+        wifiSSID: data.wifiSSID || '',
+        wifiConfigured: !!(data.wifiSSID && data.wifiPassword),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    });
+    
+    await linkDeviceToUser(data.userId, data.deviceId);
+    
+    await retryOperation(async () => {
+      await setDoc(doc(db, 'users', data.userId), {
+        deviceId: data.deviceId,
+        onboardingComplete: true,
+        onboardingStep: 'complete',
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    });
+    
+    await retryOperation(async () => {
+      await set(ref(rdb, `deviceState/${data.deviceId}`), {
+        online: false,
+        lastSeen: null,
+        batteryLevel: 100,
+        connectionMode: 'autonomous',
+        wifiConfigured: !!(data.wifiSSID && data.wifiPassword),
+        updatedAt: Date.now()
+      });
+    });
+    
+    console.log('[DeviceProvisioning] Completed successfully');
+    
+  } catch (error: any) {
+    handleFirebaseError(error, 'provisionDevice');
+  }
+}
+
+async function updateDeviceConfiguration(data: DeviceProvisioningData): Promise<void> {
+  const db = await getDbInstance();
+  
+  if (!db) {
+    throw new DeviceProvisioningError(
+      'Firestore not initialized',
+      'FIRESTORE_NOT_INITIALIZED',
+      'Error de conexión.',
+      true
+    );
+  }
+  
+  await retryOperation(async () => {
+    await setDoc(doc(db, 'deviceConfigs', data.deviceId), {
+      alarmMode: data.alarmMode,
+      ledIntensity: data.ledIntensity,
+      ledColor: data.ledColor,
+      volume: data.volume,
+      wifiSSID: data.wifiSSID || '',
+      wifiConfigured: !!(data.wifiSSID && data.wifiPassword),
+      updatedAt: serverTimestamp()
     }, { merge: true });
+  });
+  
+  await retryOperation(async () => {
+    await setDoc(doc(db, 'devices', data.deviceId), {
+      wifiConfigured: !!(data.wifiSSID && data.wifiPassword),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  });
+}
 
-    // Link to user
-    const patientDeviceRef = doc(db, 'users', userId, 'devices', deviceId);
-    await setDoc(patientDeviceRef, {
-        deviceId: deviceId,
-        role: 'admin',
-        addedAt: serverTimestamp(),
-        name: 'Pildhora de Prueba',
-        isTestDevice: true
+export async function verifyDeviceOwnership(deviceId: string, userId: string): Promise<boolean> {
+  try {
+    validateDeviceId(deviceId);
+    validateUserId(userId);
+    
+    const db = await getDbInstance();
+    
+    if (!db) {
+      throw new DeviceProvisioningError(
+        'Firestore not initialized',
+        'FIRESTORE_NOT_INITIALIZED',
+        'Error de conexión.',
+        true
+      );
+    }
+    
+    const deviceDoc = await retryOperation(async () => {
+      return await getDoc(doc(db, 'devices', deviceId));
     });
+    
+    if (!deviceDoc.exists()) {
+      return false;
+    }
+    
+    return deviceDoc.data()?.primaryPatientId === userId;
+    
+  } catch (error: any) {
+    handleFirebaseError(error, 'verifyDeviceOwnership');
+  }
+}
 
-    // Update RDB (Mocking the hardware response)
-    const rdbConfigRef = ref(rdb, `devices/${deviceId}/config`);
-    await set(rdbConfigRef, {
-        wifi_ssid: data.wifiSSID || 'TEST_WIFI',
-        wifi_password: 'TEST_PASSWORD',
-        provisioned: true,
-        owner_id: userId,
-        updated_at: Date.now()
-    });
-
-    // Simulate device state in RDB
-    const rdbStateRef = ref(rdb, `devices/${deviceId}/state`);
-    await set(rdbStateRef, {
-        online: true,
-        wifi_connected: true,
-        battery_level: 100,
-        last_seen: Date.now()
-    });
-};
-
-// Helper for color conversion
-const hexToRgb = (hex: string) => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result
-        ? {
-            r: parseInt(result[1], 16),
-            g: parseInt(result[2], 16),
-            b: parseInt(result[3], 16),
-        }
-        : { r: 0, g: 0, b: 0 };
+export default {
+  provisionDevice,
+  checkDeviceExists,
+  verifyDeviceOwnership
 };

@@ -16,7 +16,7 @@ import { useNetworkStatus } from '../../src/hooks/useNetworkStatus';
 import { useScrollViewPadding } from '../../src/hooks/useScrollViewPadding';
 import {
   waitForFirebaseInitialization,
-  reinitializeFirebase
+  reinitializeFirebase,
 } from '../../src/services/firebase';
 import { Button, Container } from '../../src/components/ui';
 import { PatientWithDevice } from '../../src/types';
@@ -34,6 +34,7 @@ import {
   PatientSelectorSkeleton,
 } from '../../src/components/caregiver/skeletons';
 import { ErrorBoundary } from '../../src/components/shared/ErrorBoundary';
+import { TestTopoButton } from '../../src/components/shared';
 import { ErrorState } from '../../src/components/caregiver/ErrorState';
 import { OfflineIndicator } from '../../src/components/caregiver/OfflineIndicator';
 import { patientDataCache } from '../../src/services/patientDataCache';
@@ -494,20 +495,20 @@ export default function CaregiverDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.gray[50],
+    backgroundColor: colors.background,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    // paddingBottom is applied dynamically via useScrollViewPadding hook
+    paddingTop: spacing.md,
   },
   content: {
-    padding: spacing.md,
-    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.lg,
   },
   card: {
-    marginBottom: spacing.md,
+    // Cards handle their own styling
   },
   // Cached data banner
   cachedDataBanner: {
@@ -515,15 +516,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.warning[50],
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.warning[200],
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
   },
   cachedDataText: {
     flex: 1,
     fontSize: typography.fontSize.sm,
-    color: colors.warning[500],
+    color: colors.warning[600],
     fontWeight: typography.fontWeight.medium,
   },
   // Empty states
@@ -531,25 +535,26 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: spacing['3xl'] * 2, // 64px
-    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing['3xl'] * 2,
+    paddingHorizontal: spacing['2xl'],
     minHeight: 400,
   },
   emptyTitle: {
     fontSize: typography.fontSize['2xl'],
     fontWeight: typography.fontWeight.bold,
-    color: colors.gray[700],
-    marginTop: spacing.lg,
+    color: colors.gray[800],
+    marginTop: spacing.xl,
     textAlign: 'center',
   },
   emptyDescription: {
     fontSize: typography.fontSize.base,
-    color: colors.gray[600],
+    color: colors.gray[500],
     marginTop: spacing.sm,
     textAlign: 'center',
-    lineHeight: typography.fontSize.base * typography.lineHeight.normal,
+    lineHeight: typography.fontSize.base * typography.lineHeight.relaxed,
+    maxWidth: 280,
   },
   emptyButton: {
-    marginTop: spacing.xl,
+    marginTop: spacing['2xl'],
   },
 });

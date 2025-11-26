@@ -213,61 +213,58 @@ export default function QuickActionsPanel({ onNavigate }: QuickActionsPanelProps
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
   },
   sectionTitle: {
-    fontSize: typography.fontSize.xl,
+    fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.bold,
-    color: colors.gray[900],
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.lg,
+    color: colors.gray[500],
+    marginBottom: spacing.md,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: spacing.md,
     gap: spacing.md,
-    justifyContent: 'space-between', // Ensures even spacing
+    justifyContent: 'space-between',
   },
   gridTablet: {
     flexDirection: 'row',
     flexWrap: 'nowrap',
     justifyContent: 'space-between',
-    gap: spacing.lg, // Larger gap for tablet layout
+    gap: spacing.lg,
   },
   cardWrapper: {
-    width: '48%', // 2 columns on mobile
-    aspectRatio: 1,
-    marginBottom: spacing.sm, // Additional spacing between rows
+    width: '48%',
+    aspectRatio: 1.1,
   },
   cardWrapperTablet: {
-    width: '23%', // 4 columns on tablet
+    width: '23%',
     aspectRatio: 1,
   },
   card: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
     justifyContent: 'center',
     alignItems: 'center',
-    ...shadows.md,
-    borderWidth: 1,
-    borderColor: colors.gray[100],
-    minHeight: 120, // Ensures adequate touch target size
+    ...shadows.sm,
+    minHeight: 100,
   },
   iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: borderRadius.full,
+    width: 52,
+    height: 52,
+    borderRadius: borderRadius.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   cardTitle: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.gray[900], // High contrast (21:1) meets WCAG AAA
+    color: colors.gray[800],
     textAlign: 'center',
   },
 });

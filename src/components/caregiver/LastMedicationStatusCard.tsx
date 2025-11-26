@@ -287,11 +287,13 @@ export const LastMedicationStatusCard: React.FC<LastMedicationStatusCardProps> =
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: colors.primary[50],
+    backgroundColor: colors.gray[50],
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    paddingVertical: spacing.md,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
   },
   headerContent: {
     flexDirection: 'row',
@@ -304,27 +306,22 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.surface,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.primary[50],
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.primary[500],
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   title: {
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.bold,
-    color: colors.primary[900],
+    color: colors.gray[900],
   },
   subtitle: {
     fontSize: typography.fontSize.xs,
-    color: colors.primary[600],
-    marginTop: 2,
+    color: colors.gray[500],
+    marginTop: 1,
   },
   content: {
     padding: spacing.lg,

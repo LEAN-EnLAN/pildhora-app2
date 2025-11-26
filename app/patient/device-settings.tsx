@@ -8,7 +8,7 @@ import { Card, Button, Input, ErrorMessage, SuccessMessage, LoadingSpinner, Anim
 import { DeviceConfigPanel } from '../../src/components/shared/DeviceConfigPanel';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/theme/tokens';
 import { getDbInstance, getRdbInstance, getAuthInstance } from '../../src/services/firebase';
-import { ref, get, push, set } from 'firebase/database';
+import { ref, get, push, set, onValue, off } from 'firebase/database';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { DeviceLink, ConnectionCodeData } from '../../src/types';
 import { generateCode, getActiveCodes, revokeCode } from '../../src/services/connectionCode';
@@ -44,6 +44,7 @@ export default function DeviceSettings() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [generatingCode, setGeneratingCode] = useState(false);
+  const [topoState, setTopoState] = useState<boolean | null>(null);
 
   const deviceId = user?.deviceId;
   const patientId = user?.id;
@@ -179,6 +180,22 @@ export default function DeviceSettings() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const rdb = await getRdbInstance();
+        if (!rdb) return;
+        const pathRef = ref(rdb, 'devices/TEST-DEVICE-001/commands/topo');
+        const cb = (snap: any) => {
+          const v = snap.val();
+          setTopoState(typeof v === 'boolean' ? v : !!v);
+        };
+        onValue(pathRef, cb);
+        return () => off(pathRef, 'value', cb as any);
+      } catch {}
+    })();
+  }, []);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -597,6 +614,37 @@ export default function DeviceSettings() {
                 >
                   Configuración Completa
                 </Button>
+              </View>
+
+              <View style={{ marginTop: 24, borderTopWidth: 1, borderTopColor: colors.gray[200], paddingTop: 24 }}>
+                 <Text style={{ marginBottom: 12, textAlign: 'center', color: colors.gray[600], fontSize: 14 }}>
+                   Zona de Pruebas
+                 </Text>
+                 <Text style={{ marginBottom: 12, textAlign: 'center', color: topoState ? '#E53935' : '#388E3C', fontSize: 14 }}>
+                   Estado TOPO: {topoState === null ? 'N/D' : topoState ? 'ON' : 'OFF'}
+                 </Text>
+                 <Button
+                    variant="secondary"
+                    onPress={async () => {
+                      try {
+                        const rdb = await getRdbInstance();
+                        if (!rdb) {
+                          console.error('Firebase Database not initialized');
+                          Alert.alert('Error', 'Firebase Database not initialized');
+                          return;
+                        }
+                        const actionPath = `devices/TEST-DEVICE-001/commands/topo`;
+                        await set(ref(rdb, actionPath), true);
+                        Alert.alert('Éxito', 'Se ha enviado la señal TOPO a TEST-DEVICE-001.');
+                      } catch (error: any) {
+                        console.error('Test Topo Error:', error);
+                        Alert.alert('Error', error.message);
+                      }
+                    }}
+                    style={{ backgroundColor: '#FF5722' }}
+                  >
+                    <Text style={{ color: 'white', fontWeight: 'bold' }}>TEST TOPO (TEST-DEVICE-001)</Text>
+                  </Button>
               </View>
             </Card>
           </View>

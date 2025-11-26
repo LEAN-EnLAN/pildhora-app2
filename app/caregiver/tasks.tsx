@@ -357,14 +357,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   headerContainer: {
-    padding: spacing.md,
-    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
     backgroundColor: colors.background,
-    marginBottom: spacing.md,
   },
   listContent: {
-    paddingHorizontal: spacing.md,
-    // paddingBottom is applied dynamically via useScrollViewPadding hook
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
   },
   listContentEmpty: {
     flexGrow: 1,
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   taskCard: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   taskContent: {
     flexDirection: 'row',

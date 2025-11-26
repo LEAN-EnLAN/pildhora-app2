@@ -4,10 +4,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '../../src/store';
 import { logout } from '../../src/store/slices/authSlice';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, StyleSheet, View, ActivityIndicator } from 'react-native';
+import { Platform, StyleSheet, View, ActivityIndicator, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CaregiverHeader } from '../../src/components/caregiver';
-import { colors, spacing, typography, shadows, borderRadius } from '../../src/theme/tokens';
+import { colors, spacing, shadows, borderRadius } from '../../src/theme/tokens';
 import { useNavigationPersistence } from '../../src/hooks/useNavigationPersistence';
 
 // Layout dimensions context for child screens to use
@@ -35,8 +35,8 @@ export default function CaregiverLayout() {
   });
 
   // Calculate layout dimensions
-  const HEADER_HEIGHT = 100; // Base header height (increased for more spacing)
-  const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 90 : 72;
+  const HEADER_HEIGHT = 90; // Base header height
+  const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 70 : 60; // Reduced height for icon-only tabs
   const headerHeight = HEADER_HEIGHT + insets.top;
   const tabBarHeight = TAB_BAR_HEIGHT;
   const contentInsetTop = headerHeight;
@@ -131,13 +131,13 @@ export default function CaregiverLayout() {
           screenOptions={{
             headerShown: false,
             tabBarActiveTintColor: colors.primary[600],
-            tabBarInactiveTintColor: colors.gray[500],
+            tabBarInactiveTintColor: colors.gray[400],
             tabBarStyle: styles.tabBar,
-            tabBarLabelStyle: styles.tabBarLabel,
+            tabBarShowLabel: false, // Icon-only navigation
             tabBarIconStyle: styles.tabBarIcon,
             tabBarItemStyle: styles.tabBarItem,
             tabBarAllowFontScaling: false,
-            tabBarHideOnKeyboard: false,
+            tabBarHideOnKeyboard: true,
             tabBarBackground: () => (
               <View style={styles.tabBarBackground} />
             ),
@@ -146,13 +146,14 @@ export default function CaregiverLayout() {
         <Tabs.Screen
           name="dashboard"
           options={{
-            tabBarLabel: 'Inicio',
-            tabBarIcon: ({ color, size, focused }) => (
-              <Ionicons 
-                name={focused ? 'home' : 'home-outline'} 
-                size={size} 
-                color={color} 
-              />
+            tabBarIcon: ({ color, focused }) => (
+              <View style={[styles.tabIconWrapper, focused && styles.tabIconWrapperActive]}>
+                <Ionicons 
+                  name={focused ? 'home' : 'home-outline'} 
+                  size={24} 
+                  color={color} 
+                />
+              </View>
             ),
             tabBarAccessibilityLabel: 'Inicio - Tablero principal del cuidador',
           }}
@@ -160,13 +161,14 @@ export default function CaregiverLayout() {
         <Tabs.Screen
           name="tasks"
           options={{
-            tabBarLabel: 'Tareas',
-            tabBarIcon: ({ color, size, focused }) => (
-              <Ionicons 
-                name={focused ? 'checkbox' : 'checkbox-outline'} 
-                size={size} 
-                color={color} 
-              />
+            tabBarIcon: ({ color, focused }) => (
+              <View style={[styles.tabIconWrapper, focused && styles.tabIconWrapperActive]}>
+                <Ionicons 
+                  name={focused ? 'checkbox' : 'checkbox-outline'} 
+                  size={24} 
+                  color={color} 
+                />
+              </View>
             ),
             tabBarAccessibilityLabel: 'Tareas - Gestionar tareas del cuidador',
           }}
@@ -174,13 +176,14 @@ export default function CaregiverLayout() {
         <Tabs.Screen
           name="patients"
           options={{
-            tabBarLabel: 'Pacientes',
-            tabBarIcon: ({ color, size, focused }) => (
-              <Ionicons 
-                name={focused ? 'people' : 'people-outline'} 
-                size={size} 
-                color={color} 
-              />
+            tabBarIcon: ({ color, focused }) => (
+              <View style={[styles.tabIconWrapper, focused && styles.tabIconWrapperActive]}>
+                <Ionicons 
+                  name={focused ? 'people' : 'people-outline'} 
+                  size={24} 
+                  color={color} 
+                />
+              </View>
             ),
             tabBarAccessibilityLabel: 'Pacientes - Gestionar pacientes y dispositivos vinculados',
           }}
@@ -188,13 +191,14 @@ export default function CaregiverLayout() {
         <Tabs.Screen
           name="events"
           options={{
-            tabBarLabel: 'Eventos',
-            tabBarIcon: ({ color, size, focused }) => (
-              <Ionicons 
-                name={focused ? 'notifications' : 'notifications-outline'} 
-                size={size} 
-                color={color} 
-              />
+            tabBarIcon: ({ color, focused }) => (
+              <View style={[styles.tabIconWrapper, focused && styles.tabIconWrapperActive]}>
+                <Ionicons 
+                  name={focused ? 'notifications' : 'notifications-outline'} 
+                  size={24} 
+                  color={color} 
+                />
+              </View>
             ),
             tabBarAccessibilityLabel: 'Eventos - Ver registro de eventos de medicamentos',
           }}
@@ -202,48 +206,25 @@ export default function CaregiverLayout() {
         <Tabs.Screen
           name="settings"
           options={{
-            tabBarLabel: 'Ajustes',
-            tabBarIcon: ({ color, size, focused }) => (
-              <Ionicons 
-                name={focused ? 'settings' : 'settings-outline'} 
-                size={size} 
-                color={color} 
-              />
+            tabBarIcon: ({ color, focused }) => (
+              <View style={[styles.tabIconWrapper, focused && styles.tabIconWrapperActive]}>
+                <Ionicons 
+                  name={focused ? 'settings' : 'settings-outline'} 
+                  size={24} 
+                  color={color} 
+                />
+              </View>
             ),
             tabBarAccessibilityLabel: 'Ajustes - Configuración del cuidador',
           }}
         />
-        {/* Modal screens and nested routes - hidden from tab bar */}
-        <Tabs.Screen 
-          name="medications" 
-          options={{ 
-            href: null,
-          }} 
-        />
-        <Tabs.Screen 
-          name="device-connection" 
-          options={{ 
-            href: null,
-          }} 
-        />
-        <Tabs.Screen 
-          name="add-device" 
-          options={{ 
-            href: null,
-          }} 
-        />
-        <Tabs.Screen 
-          name="device-connection-confirm" 
-          options={{ 
-            href: null,
-          }} 
-        />
-        <Tabs.Screen 
-          name="edit-profile" 
-          options={{ 
-            href: null,
-          }} 
-        />
+        {/* Hidden screens - not shown in tab bar */}
+        <Tabs.Screen name="medications" options={{ href: null }} />
+        <Tabs.Screen name="device-connection" options={{ href: null }} />
+        <Tabs.Screen name="add-device" options={{ href: null }} />
+        <Tabs.Screen name="device-connection-confirm" options={{ href: null }} />
+        <Tabs.Screen name="edit-profile" options={{ href: null }} />
+        <Tabs.Screen name="reports" options={{ href: null }} />
         </Tabs>
       </View>
     </LayoutDimensionsContext.Provider>
@@ -267,42 +248,47 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 1000,
-    backgroundColor: colors.background,
-    ...shadows.md,
+    backgroundColor: colors.surface,
   },
   tabBar: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
+    left: spacing.md,
+    right: spacing.md,
     backgroundColor: 'transparent',
     borderTopWidth: 0,
-    paddingTop: spacing.md,
-    paddingBottom: Platform.OS === 'ios' ? spacing['2xl'] + spacing.sm : spacing.lg,
-    paddingHorizontal: spacing.md,
-    height: Platform.OS === 'ios' ? 90 : 72,
-    ...shadows.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.md,
+    paddingHorizontal: spacing.sm,
+    height: Platform.OS === 'ios' ? 70 : 60,
+    marginBottom: Platform.OS === 'ios' ? spacing.md : spacing.sm,
+    elevation: 0,
   },
   tabBarBackground: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.surface,
-    borderTopLeftRadius: spacing['2xl'],
-    borderTopRightRadius: spacing['2xl'],
-  },
-  tabBarLabel: {
-    fontSize: typography.fontSize.xs - 1,
-    fontWeight: typography.fontWeight.bold,
-    marginTop: spacing.xs - 2,
-    letterSpacing: 0.3,
+    borderRadius: borderRadius.xl,
+    ...shadows.lg,
   },
   tabBarIcon: {
     marginBottom: 0,
   },
   tabBarItem: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    gap: spacing.xs - 2,
-    borderRadius: borderRadius.md,
-    marginHorizontal: spacing.xs - 2,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.lg,
+    marginHorizontal: spacing.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabIconWrapperActive: {
+    backgroundColor: colors.primary[50],
   },
 });

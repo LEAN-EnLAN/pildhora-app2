@@ -1,16 +1,12 @@
 {
   "rules": {
     "devices": {
-      "$deviceId": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      }
+      ".read": true,
+      ".write": true
     },
     "users": {
-      "$userId": {
-        ".read": "auth != null && auth.uid == $userId",
-        ".write": "auth != null && auth.uid == $userId"
-      }
+      ".read": true,
+      ".write": true
     }
   }
 }

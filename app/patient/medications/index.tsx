@@ -106,7 +106,7 @@ export default function MedicationsIndex() {
       <Text style={styles.emptyDescription}>
         Agrega tu primer medicamento para comenzar
       </Text>
-      <Pressable
+      <TouchableOpacity
         style={styles.emptyButton}
         onPress={() => router.push('/patient/medications/add')}
         accessibilityLabel="Agregar primer medicamento"
@@ -114,7 +114,7 @@ export default function MedicationsIndex() {
       >
         <Ionicons name="add" size={20} color="#FFFFFF" />
         <Text style={styles.emptyButtonText}>Agregar medicamento</Text>
-      </Pressable>
+      </TouchableOpacity>
     </View>
   ), [router]);
 

@@ -315,30 +315,29 @@ export default function PatientsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.gray[50],
+    backgroundColor: colors.background,
   },
   scrollContent: {
     padding: spacing.lg,
-    // paddingBottom is applied dynamically via useScrollViewPadding hook
   },
   // Header
   header: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   title: {
-    fontSize: typography.fontSize['2xl'],
+    fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.gray[900],
     marginBottom: spacing.xs,
   },
   subtitle: {
-    fontSize: typography.fontSize.base,
-    color: colors.gray[600],
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[500],
   },
   // Error State
   errorCard: {
@@ -402,18 +401,17 @@ const styles = StyleSheet.create({
   },
   patientCard: {
     padding: 0,
-    overflow: 'hidden',
   },
   patientCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.md,
+    padding: spacing.lg,
   },
   patientAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.full,
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.primary[50],
     justifyContent: 'center',
     alignItems: 'center',
@@ -480,10 +478,10 @@ const styles = StyleSheet.create({
   },
   // Help Card
   helpCard: {
-    backgroundColor: colors.primary[50],
-    borderColor: colors.primary[100],
+    backgroundColor: colors.gray[50],
+    borderColor: colors.gray[100],
     borderWidth: 1,
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
   },
   helpHeader: {
     flexDirection: 'row',
