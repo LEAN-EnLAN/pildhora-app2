@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BarChart } from 'react-native-chart-kit';
 import { IntakeStatus } from '../../../src/types';
 import { startIntakesSubscription, stopIntakesSubscription } from '../../../src/store/slices/intakesSlice';
+import { startMedicationsSubscription, stopMedicationsSubscription } from '../../../src/store/slices/medicationsSlice';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -25,13 +26,15 @@ export default function PatientReportsScreen() {
 
     const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month'>('day');
 
-    // Subscribe to intakes
+    // Subscribe to intakes and medications
     useEffect(() => {
         if (pid) {
             dispatch(startIntakesSubscription(pid));
+            dispatch(startMedicationsSubscription(pid));
         }
         return () => {
             dispatch(stopIntakesSubscription());
+            dispatch(stopMedicationsSubscription());
         };
     }, [pid, dispatch]);
 

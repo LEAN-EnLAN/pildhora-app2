@@ -2,7 +2,7 @@
  * Patient Home Screen - Redesigned with Visual Priority Hierarchy
  * Fixed: Proper dose tracking, adherence integration, consistent data
  */
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -30,13 +30,17 @@ import { Card, Button, Modal } from '../../src/components/ui';
 import AppIcon from '../../src/components/ui/AppIcon';
 import BrandedLoadingScreen from '../../src/components/ui/BrandedLoadingScreen';
 import { startDeviceListener, stopDeviceListener } from '../../src/store/slices/deviceSlice';
-import { Medication, IntakeStatus } from '../../src/types';
-import { getDbInstance, getRdbInstance } from '../../src/services/firebase';
+import { Medication, IntakeStatus, MedicationEvent, MedicationEventType } from '../../types';
+import { getDbInstance, getRdbInstance } from '../../services/firebase';
 import { addDoc, collection, Timestamp } from 'firebase/firestore';
-import { ref, get as rdbGet } from 'firebase/database';
+import { ref, get as rdbGet, set } from 'firebase/database';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/theme/tokens';
 import { usePatientAutonomousMode } from '../../src/hooks/usePatientAutonomousMode';
 import { setAutonomousMode } from '../../src/services/autonomousMode';
+import { useTopoStatus } from '../../src/hooks/useTopoStatus';
+import { TopoAlarmOverlay } from '../../src/components/patient/TopoAlarmOverlay';
+import { TopoConfirmationOverlay } from '../../src/components/patient/TopoConfirmationOverlay';
+import { AutonomousIntakeOverlay } from '../../src/components/patient/AutonomousIntakeOverlay';
 
 const DAY_ABBREVS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const getTodayAbbrev = () => DAY_ABBREVS[new Date().getDay()];
@@ -318,6 +322,7 @@ export default function PatientHome() {
   const { user } = useSelector((state: RootState) => state.auth);
   const patientId = user?.id;
   const { isAutonomous } = usePatientAutonomousMode(patientId);
+  const { isTopoActive, wasTopoActive } = useTopoStatus(user?.deviceId);
   const { medications, loading } = useSelector((state: RootState) => state.medications);
   const { intakes } = useSelector((state: RootState) => state.intakes);
   const deviceSlice = useSelector((state: RootState) => (state as any).device);
@@ -332,27 +337,51 @@ export default function PatientHome() {
   const [takingLoading, setTakingLoading] = useState(false);
   const [accountMenuVisible, setAccountMenuVisible] = useState(false);
   const [currentTime, setCurrentTime] = useState(getCurrentTimeDecimal());
+  
+  // Autonomous Mode Overlay State
+  const [autonomousOverlayVisible, setAutonomousOverlayVisible] = useState(false);
+  const [triggeredDoseId, setTriggeredDoseId] = useState<string | null>(null);
 
-  useEffect(() => { 
-    const interval = setInterval(() => setCurrentTime(getCurrentTimeDecimal()), 30000); 
-    return () => clearInterval(interval); 
-  }, []);
-
-  useEffect(() => { 
-    if (patientId) { 
-      dispatch(startMedicationsSubscription(patientId)); 
-      dispatch(startIntakesSubscription(patientId)); 
-    } 
-    return () => { 
-      if (patientId) {
-        dispatch(stopMedicationsSubscription());
-        dispatch(stopIntakesSubscription()); 
-      }
-    }; 
-  }, [patientId, dispatch]);
-
-  const initDevice = useCallback(async () => {
+    useEffect(() => { 
+      const interval = setInterval(() => setCurrentTime(getCurrentTimeDecimal()), 30000); 
+      return () => clearInterval(interval); 
+    }, []);
+  
+  const triggerTopo = async (active: boolean) => {
+    if (!user?.deviceId) return;
     try {
+      const rdb = await getRdbInstance();
+      if (!rdb) return;
+      // Write to devices/{deviceId}/commands/topo
+      await set(ref(rdb, `devices/${user.deviceId}/commands/topo`), active);
+      // Also log the interaction if needed (audit log)
+    } catch (e) {
+      console.error('Error triggering topo:', e);
+    }
+  };
+
+    useFocusEffect(
+      useCallback(() => {
+        if (patientId) {
+          dispatch(startMedicationsSubscription(patientId));
+          dispatch(startIntakesSubscription(patientId));
+        }
+        return () => {
+          // No cleanup on blur to prevent race conditions with other screens
+        };
+      }, [patientId, dispatch])
+    );
+  
+    useEffect(() => {
+      return () => {
+        if (patientId) {
+          dispatch(stopMedicationsSubscription());
+          dispatch(stopIntakesSubscription());
+        }
+      };
+    }, [patientId, dispatch]);
+  
+    const initDevice = useCallback(async () => {    try {
       if (!patientId) return;
       const rdb = await getRdbInstance();
       if (!rdb) return;
@@ -480,6 +509,86 @@ export default function PatientHome() {
     return Math.round((nextDose.timeDecimal - currentTime) * 60);
   }, [nextDose, currentTime]);
 
+  // Trigger Logic for Medication Time
+  useEffect(() => {
+    if (!nextDose) return;
+
+    const timeDiff = (nextDose.timeDecimal - currentTime) * 60; // Difference in minutes
+    const isDue = timeDiff <= 0 && timeDiff > -60; // Due now or within last hour (if not taken)
+    
+    // Trigger if due and not already triggered for this dose ID
+    if (isDue && triggeredDoseId !== nextDose.id) {
+      setTriggeredDoseId(nextDose.id);
+      
+      if (isAutonomous) {
+        // Autonomous Mode: Show Overlay
+        setAutonomousOverlayVisible(true);
+      } else {
+        // Supervised Mode: Trigger Topo Alarm
+        triggerTopo(true);
+      }
+    }
+  }, [nextDose, currentTime, isAutonomous, triggeredDoseId, user?.deviceId]);
+
+  // ============================================================================
+  // AUTONOMOUS MODE LOGIC
+  // ============================================================================
+  const processingAutoDoses = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!isAutonomous || !patientId || !isDeviceOnline) return;
+
+    const checkAndAutoTake = async () => {
+      // Filter for doses that are due, not completed, and not currently processing
+      const dueDoses = allTodayDoses.filter(dose => {
+        const isDue = dose.timeDecimal <= currentTime;
+        // Ensure we don't process if it's already marked completed or skipped in the UI list
+        // (though allTodayDoses updates via subscription, there's a latency)
+        return isDue && !dose.isCompleted && !dose.isSkipped && !processingAutoDoses.current.has(dose.id);
+      });
+
+      if (dueDoses.length === 0) return;
+
+      const db = await getDbInstance();
+      if (!db) return;
+
+      for (const dose of dueDoses) {
+        try {
+          console.log(`[AutoMode] Auto-registering dose: ${dose.medicationName} (${dose.scheduledTime})`);
+          processingAutoDoses.current.add(dose.id);
+
+          // Reconstruct scheduled date for record
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const hh = Math.floor(dose.timeDecimal);
+          const mm = Math.round((dose.timeDecimal - hh) * 60);
+          const scheduledDate = new Date(today);
+          scheduledDate.setHours(hh, mm, 0, 0);
+
+          const intakeData = {
+            medicationId: dose.medicationId,
+            medicationName: dose.medicationName,
+            dosage: dose.dosage,
+            scheduledTime: scheduledDate.toISOString(),
+            status: IntakeStatus.TAKEN,
+            takenAt: new Date().toISOString(),
+            patientId: patientId,
+            deviceId: user?.deviceId || 'autonomous-auto',
+            isAutonomous: true,
+            timestamp: new Date().toISOString()
+          };
+
+          await addDoc(collection(db, 'intakeRecords'), intakeData);
+        } catch (e) {
+          console.error('[AutoMode] Error taking dose:', e);
+          processingAutoDoses.current.delete(dose.id); // Allow retry
+        }
+      }
+    };
+
+    checkAndAutoTake();
+  }, [currentTime, isAutonomous, allTodayDoses, patientId, isDeviceOnline, user]);
+
   // Handlers
   const callEmergency = useCallback((number: string) => { try { Linking.openURL(`tel:${number}`); } catch {} setEmergencyModalVisible(false); }, []);
   const handleEmergencyPress = useCallback(() => {
@@ -507,74 +616,95 @@ export default function PatientHome() {
     }
   }, [patientId]);
 
+  // Helper to record medication event for caregiver timeline
+  const recordMedicationEvent = async (
+    dose: any, 
+    type: MedicationEventType, 
+    status: 'taken' | 'skipped' | 'missed', 
+    skipReason?: string
+  ) => {
+    if (!user?.id || !dose) return;
+    try {
+      const db = await getDbInstance();
+      if (!db) return;
+      
+      const eventData: Omit<MedicationEvent, 'id'> = {
+        eventType: type,
+        medicationId: dose.medicationId,
+        medicationName: dose.medicationName,
+        medicationData: { dosage: dose.dosage },
+        patientId: user.id,
+        patientName: displayName,
+        caregiverId: '', // This would need to be fetched if needed, or left empty/handled by backend
+        timestamp: new Date().toISOString(),
+        syncStatus: 'synced', // Assuming online for now
+        status: status,
+        skipReason: skipReason
+      };
+      
+      await addDoc(collection(db, 'medicationEvents'), eventData);
+    } catch (e) {
+      console.error('[Home] Error recording medication event:', e);
+    }
+  };
+
+  // Helper to record intake record
+  const recordIntake = async (dose: any, status: IntakeStatus, reason?: string) => {
+    if (!user?.id || !dose) return;
+    
+    const db = await getDbInstance();
+    if (!db) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const timeDecimal = dose.timeDecimal;
+    const hh = Math.floor(timeDecimal);
+    const mm = Math.round((timeDecimal - hh) * 60);
+    const scheduledDate = new Date(today);
+    scheduledDate.setHours(hh, mm, 0, 0);
+
+    const intakeData = {
+      medicationId: dose.medicationId,
+      medicationName: dose.medicationName,
+      dosage: dose.dosage,
+      scheduledTime: scheduledDate.toISOString(),
+      status: status,
+      takenAt: status === IntakeStatus.TAKEN ? new Date().toISOString() : null,
+      patientId: user.id,
+      deviceId: user.deviceId || 'manual',
+      isAutonomous: isAutonomous,
+      skipReason: reason || '',
+      timestamp: new Date().toISOString()
+    };
+
+    await addDoc(collection(db, 'intakeRecords'), intakeData);
+  };
+
+  // Supervised Mode: Handle Topo Confirmation (Auto-record intake)
+  useEffect(() => {
+    if (wasTopoActive && triggeredDoseId && nextDose && nextDose.id === triggeredDoseId && !isAutonomous) {
+      // Topo was active and just turned off -> User took the pill
+      const recordSupervisedIntake = async () => {
+        try {
+          console.log('[Home] Recording supervised intake after Topo confirmation');
+          await recordIntake(nextDose, IntakeStatus.TAKEN);
+          await recordMedicationEvent(nextDose, 'taken', 'taken');
+          setTriggeredDoseId(null); // Reset trigger
+        } catch (e) {
+          console.error('Error recording supervised intake:', e);
+        }
+      };
+      recordSupervisedIntake();
+    }
+  }, [wasTopoActive, triggeredDoseId, nextDose, isAutonomous]);
+
   const handleTakeDose = useCallback(async () => {
     if (isAutonomous && nextDose) {
-      // Find the existing intake record ID or create a new one logic would be complex here as we need the exact record ID.
-      // However, looking at intakesSlice, we see intakes are fetched.
-      // We need to find the intake record for this scheduled dose.
-      // The HeroCard displays 'nextDose' which is computed from 'allTodayDoses'.
-      // 'allTodayDoses' logic tries to match existing intakes.
-      // If an intake exists (TAKEN/MISSED), it's completed.
-      // If it doesn't exist, we need to create it? Or update if it exists?
-      // Wait, updateIntakeStatus takes an ID.
-      // If the record doesn't exist yet (which is the case for pending doses usually, unless pre-generated),
-      // we might need to create it.
-      // BUT, let's look at how intakes are structured. They seem to be records of *events*.
-      // If 'nextDose' is pending, there might NOT be an intake record yet.
-      // In that case, we should probably add a new document to 'intakeRecords'.
-      // However, updateIntakeStatus assumes an ID.
-      
-      // Let's check if there is an existing intake for this slot.
-      // The 'nextDose' object in 'allTodayDoses' doesn't seem to carry the intake ID unless it was already created.
-      // 'id' in 'nextDose' is constructed as `${med.id}-${idx}`.
-      
-      // If we are in autonomous mode, we want to manually register the dose.
-      // We should probably use a direct Firestore call or a thunk that handles creation if needed.
-      // Given the current setup, let's check if we can find a matching intake in 'intakes' array.
-      
-      const scheduledTime = nextDose.scheduledTime;
-      // We need to reconstruct the full date for the scheduled time to match/create
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const timeDecimal = nextDose.timeDecimal;
-      const hh = Math.floor(timeDecimal);
-      const mm = Math.round((timeDecimal - hh) * 60);
-      const scheduledDate = new Date(today);
-      scheduledDate.setHours(hh, mm, 0, 0);
-      
-      // Check if there is already an intake record for this medication and time
-      // The logic in allTodayDoses (lines 356-367) does this matching.
-      // But we don't have the ID of that potential match easily available in nextDose if it wasn't matched.
-      // If it wasn't matched (which is likely why it's pending), we need to create one.
-      
       try {
         setTakingLoading(true);
-        const db = await getDbInstance();
-        if (!db || !user?.id) return;
-
-        // Check for existing record first to avoid duplicates
-        // This query matches the logic in startIntakesSubscription/allTodayDoses essentially
-        // But simpler: just add a new record.
-        // Wait, if we just add a record, the subscription will pick it up and update the UI.
-        
-        const intakeData = {
-          medicationId: nextDose.medicationId,
-          medicationName: nextDose.medicationName,
-          dosage: nextDose.dosage,
-          scheduledTime: scheduledDate.toISOString(),
-          status: IntakeStatus.TAKEN,
-          takenAt: new Date().toISOString(),
-          patientId: user.id,
-          deviceId: user.deviceId || 'manual',
-          isAutonomous: true, // Flag as autonomous
-          timestamp: new Date().toISOString()
-        };
-
-        await addDoc(collection(db, 'intakeRecords'), intakeData);
-        
-        // Optimistic update or wait for subscription?
-        // Subscription is fast.
-        
+        await recordIntake(nextDose, IntakeStatus.TAKEN);
+        await recordMedicationEvent(nextDose, 'taken', 'taken');
+        setAutonomousOverlayVisible(false);
       } catch (e) {
         console.error('Error taking dose autonomously:', e);
         Alert.alert('Error', 'No se pudo registrar la dosis. Intenta nuevamente.');
@@ -583,39 +713,16 @@ export default function PatientHome() {
       }
       return;
     }
-    
     Alert.alert('Acción no disponible', 'Las dosis se registran automáticamente por el dispositivo enlazado.');
   }, [isAutonomous, nextDose, user]);
 
-  const handleSkipDose = useCallback(async () => {
+  const handleSkipDose = useCallback(async (reason?: string) => {
     if (isAutonomous && nextDose) {
       try {
         setTakingLoading(true);
-        const db = await getDbInstance();
-        if (!db || !user?.id) return;
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const timeDecimal = nextDose.timeDecimal;
-        const hh = Math.floor(timeDecimal);
-        const mm = Math.round((timeDecimal - hh) * 60);
-        const scheduledDate = new Date(today);
-        scheduledDate.setHours(hh, mm, 0, 0);
-
-        const intakeData = {
-          medicationId: nextDose.medicationId,
-          medicationName: nextDose.medicationName,
-          dosage: nextDose.dosage,
-          scheduledTime: scheduledDate.toISOString(),
-          status: IntakeStatus.MISSED, // Skipped counts as missed/omitted
-          takenAt: null,
-          patientId: user.id,
-          deviceId: user.deviceId || 'manual',
-          isAutonomous: true,
-          timestamp: new Date().toISOString()
-        };
-
-        await addDoc(collection(db, 'intakeRecords'), intakeData);
+        await recordIntake(nextDose, IntakeStatus.MISSED, reason);
+        await recordMedicationEvent(nextDose, 'skipped', 'skipped', reason);
+        setAutonomousOverlayVisible(false);
       } catch (e) {
         console.error('Error skipping dose autonomously:', e);
         Alert.alert('Error', 'No se pudo omitir la dosis. Intenta nuevamente.');
@@ -659,28 +766,35 @@ export default function PatientHome() {
       {/* Modals */}
       {Platform.OS !== 'ios' && (
         <Modal visible={emergencyModalVisible} onClose={() => setEmergencyModalVisible(false)} title="Emergencia" size="sm">
-          <View style={styles.modalActions}>
-            <Button variant="danger" size="lg" fullWidth onPress={() => callEmergency('911')}>Llamar 911</Button>
-            <Button variant="secondary" size="lg" fullWidth onPress={() => callEmergency('112')}>Llamar 112</Button>
-            <Button variant="secondary" size="lg" fullWidth onPress={() => setEmergencyModalVisible(false)}>Cancelar</Button>
-          </View>
-        </Modal>
-      )}
-      {Platform.OS !== 'ios' && (
-        <Modal visible={accountMenuVisible} onClose={() => setAccountMenuVisible(false)} title="Cuenta" size="sm">
-          <View style={styles.modalActions}>
-            <Button variant="danger" size="lg" fullWidth onPress={() => { setAccountMenuVisible(false); handleLogout(); }}>Salir de sesión</Button>
-            <Button variant="secondary" size="lg" fullWidth onPress={() => { setAccountMenuVisible(false); router.push('/patient/settings'); }}>Configuraciones</Button>
-            <Button variant="secondary" size="lg" fullWidth onPress={() => { setAccountMenuVisible(false); router.push('/patient/device-settings'); }}>Mi dispositivo</Button>
-            <Button variant="secondary" size="lg" fullWidth onPress={() => setAccountMenuVisible(false)}>Cancelar</Button>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalText}>¿A quién deseas llamar?</Text>
+            <Button title="Llamar a 911" onPress={() => callEmergency('911')} variant="danger" fullWidth style={{ marginBottom: spacing.sm }} />
+            <Button title="Llamar a 112" onPress={() => callEmergency('112')} variant="outline" fullWidth />
           </View>
         </Modal>
       )}
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Hero Card or All Done */}
-        {nextDose ? (
-          <View style={styles.heroSection}>
+      {/* Account Menu (Android) */}
+      {Platform.OS !== 'ios' && (
+        <Modal visible={accountMenuVisible} onClose={() => setAccountMenuVisible(false)} title="Mi Cuenta" size="sm">
+          <View style={styles.modalContent}>
+            <Button title="Mi Dispositivo" onPress={() => { setAccountMenuVisible(false); router.push('/patient/device-settings'); }} variant="outline" fullWidth style={{ marginBottom: spacing.sm }} leftIcon={<Ionicons name="hardware-chip-outline" size={20} />} />
+            <Button title="Configuraciones" onPress={() => { setAccountMenuVisible(false); router.push('/patient/settings'); }} variant="outline" fullWidth style={{ marginBottom: spacing.sm }} leftIcon={<Ionicons name="settings-outline" size={20} />} />
+            <Button title="Cerrar Sesión" onPress={handleLogout} variant="danger" fullWidth leftIcon={<Ionicons name="log-out-outline" size={20} />} />
+          </View>
+        </Modal>
+      )}
+
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
+        
+        {/* Adherence Progress - Visual Context */}
+        <View style={styles.progressSection}>
+           {/* Can be added here later if needed, currently inside HeroCard */}
+        </View>
+
+        {/* Hero Card - Next Dose */}
+        <View style={styles.heroSection}>
+          {nextDose ? (
             <HeroCard
               isAutonomous={isAutonomous}
               onToggleAutonomous={handleToggleAutonomous}
@@ -689,154 +803,115 @@ export default function PatientHome() {
               scheduledTime={nextDose.scheduledTime}
               icon={nextDose.icon}
               onTake={handleTakeDose}
-              onSkip={handleSkipDose}
+              onSkip={() => handleSkipDose()}
               loading={takingLoading}
-              isCompleted={nextDose.isCompleted}
-              completedAt={nextDose.completedAt}
               minutesUntilDue={minutesUntilNextDose}
               isOverdue={nextDose.isOverdue}
-              takenCount={adherenceStats.completed}
+              takenCount={adherenceStats.taken}
               totalCount={adherenceStats.total}
               isOnline={isDeviceOnline}
             />
-          </View>
-        ) : allTodayDoses.length > 0 ? (
-          <View style={styles.heroSection}>
-            <View style={styles.allDoneCard}>
-              <Ionicons name="checkmark-circle" size={72} color={colors.success[500]} />
-              <Text style={styles.allDoneTitle}>¡Todo listo!</Text>
-              <Text style={styles.allDoneText}>Completaste todas tus dosis de hoy</Text>
-              <View style={styles.allDoneStats}>
-                <View style={styles.allDoneStat}>
-                  <Text style={styles.allDoneStatNumber}>{adherenceStats.taken}</Text>
-                  <Text style={styles.allDoneStatLabel}>tomadas</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.heroSection}>
-            <Card variant="elevated" padding="lg">
-              <View style={styles.emptyDayContainer}>
-                <Ionicons name="sunny-outline" size={64} color={colors.warning[500]} />
-                <Text style={styles.emptyDayTitle}>Sin medicamentos hoy</Text>
-                <Text style={styles.emptyDayText}>No tienes dosis programadas para hoy</Text>
-              </View>
-            </Card>
-          </View>
-        )}
-              
-
-        {/* Other Doses */}
-        {otherDoses.length > 0 && (
-          <View style={styles.section}>
-            <View style={listStyles.container}>
-              <View style={listStyles.header}>
-                <Ionicons name="list-outline" size={20} color={colors.gray[600]} />
-                <Text style={listStyles.headerTitle}>
-                  {adherenceStats.pending > 0 ? `${adherenceStats.pending} pendiente${adherenceStats.pending > 1 ? 's' : ''}` : 'Historial de hoy'}
-                </Text>
-                <Text style={listStyles.headerCount}>{otherDoses.length}</Text>
-              </View>
-              {otherDoses.map((dose) => (
-                <DoseListItem key={dose.id} dose={dose} onPress={() => handleDosePress(dose)} currentTimeDecimal={currentTime} />
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <View style={styles.quickActions}>
-            <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push('/patient/medications')}>
-              <View style={styles.quickActionIcon}><Ionicons name="medkit" size={24} color={colors.primary[500]} /></View>
-              <Text style={styles.quickActionTitle}>Medicamentos</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push('/patient/history')}>
-              <View style={styles.quickActionIcon}><Ionicons name="time-outline" size={24} color={colors.primary[500]} /></View>
-              <Text style={styles.quickActionTitle}>Historial</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push('/patient/device-settings')}>
-              <View style={styles.quickActionIcon}><Ionicons name="hardware-chip-outline" size={24} color={colors.primary[500]} /></View>
-              <Text style={styles.quickActionTitle}>Dispositivo</Text>
-            </TouchableOpacity>
-          </View>
+          ) : (
+            <HeroCard
+              isAutonomous={isAutonomous}
+              onToggleAutonomous={handleToggleAutonomous}
+              medicationName="Todo listo"
+              dosage="No hay más dosis hoy"
+              scheduledTime="--:--"
+              icon="✅"
+              onTake={() => {}}
+              onSkip={() => {}}
+              isCompleted={true}
+              completedAt={new Date()}
+              takenCount={adherenceStats.taken}
+              totalCount={adherenceStats.total}
+              isOnline={isDeviceOnline}
+            />
+          )}
         </View>
 
-        
+        {/* Timeline / Schedule */}
+        <View style={styles.timelineSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Agenda de Hoy</Text>
+            {/* <Text style={styles.sectionBadge}>{otherDoses.length}</Text> */}
+          </View>
           
-
-                  
-
-              
+          <View style={listStyles.container}>
+            <View style={listStyles.header}>
+              <Text style={listStyles.headerTitle}>Dosis Programadas</Text>
+              <Text style={listStyles.headerCount}>{allTodayDoses.length}</Text>
+            </View>
+            {allTodayDoses.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No hay medicamentos programados para hoy</Text>
+              </View>
+            ) : (
+              allTodayDoses.map((dose) => (
+                <DoseListItem 
+                  key={dose.id} 
+                  dose={dose} 
+                  onPress={() => handleDosePress(dose)}
+                  currentTimeDecimal={currentTime}
+                />
+              ))
+            )}
+          </View>
+        </View>
       </ScrollView>
+
+      {/* Autonomous Mode Overlays */}
+      <AutonomousIntakeOverlay
+        visible={autonomousOverlayVisible}
+        medicationName={nextDose?.medicationName || ''}
+        dosage={nextDose?.dosage || ''}
+        scheduledTime={nextDose?.scheduledTime || ''}
+        onTake={handleTakeDose}
+        onSkip={(reason) => handleSkipDose(reason)}
+      />
+
+      {/* Topo Alarm Overlay (Active Alarm) */}
+      <TopoAlarmOverlay
+        visible={isTopoActive}
+        medicationName={nextDose?.medicationName || 'Medicamento'}
+        scheduledTime={nextDose?.scheduledTime || ''}
+      />
+
+      {/* Topo Alarm Confirmation Overlay (Success Animation) */}
+      <TopoConfirmationOverlay
+        visible={wasTopoActive}
+        medicationName={nextDose?.medicationName || 'Medicamento'}
+        onConfirm={() => {
+          // Optional manual confirmation if needed, but effect handles recording
+        }}
+      />
+
     </SafeAreaView>
   );
 }
 
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingVertical: spacing.lg, ...shadows.sm },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.gray[100] },
   headerLeft: { flex: 1 },
-  brandingContainer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  headerTitle: { fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.extrabold, color: colors.primary[600], letterSpacing: -0.5 },
-  headerSubtitle: { fontSize: typography.fontSize.base, color: colors.gray[600], marginTop: spacing.xs },
+  brandingContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
+  headerTitle: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold, color: colors.primary[600], marginLeft: spacing.xs, letterSpacing: 1 },
+  headerSubtitle: { fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.gray[900] },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  connectionBadge: { width: 32, height: 32, borderRadius: borderRadius.full, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
-  iconButton: { width: 48, height: 48, borderRadius: borderRadius.lg, alignItems: 'center', justifyContent: 'center' },
+  connectionBadge: { padding: spacing.xs, borderRadius: borderRadius.full },
+  iconButton: { width: 40, height: 40, borderRadius: borderRadius.full, alignItems: 'center', justifyContent: 'center' },
   emergencyButton: { backgroundColor: colors.error[500] },
   accountButton: { backgroundColor: colors.gray[100] },
-  scrollView: { flex: 1 },
-  scrollContent: { paddingBottom: spacing['3xl'] },
-  heroSection: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
-  section: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
-  modalActions: { gap: spacing.md },
-  // All Done Card
-  allDoneCard: { 
-    backgroundColor: colors.surface, 
-    borderRadius: borderRadius.xl, 
-    padding: spacing['2xl'], 
-    alignItems: 'center', 
-    ...shadows.lg,
-  },
-  allDoneTitle: { 
-    fontSize: typography.fontSize['2xl'], 
-    fontWeight: typography.fontWeight.bold, 
-    color: colors.success[600], 
-    marginTop: spacing.lg,
-    marginBottom: spacing.xs,
-  },
-  allDoneText: { 
-    fontSize: typography.fontSize.base, 
-    color: colors.gray[500], 
-    marginBottom: spacing.lg,
-  },
-  allDoneStats: { 
-    backgroundColor: colors.success[50], 
-    borderRadius: borderRadius.lg, 
-    paddingVertical: spacing.md, 
-    paddingHorizontal: spacing['2xl'],
-  },
-  allDoneStat: { 
-    alignItems: 'center',
-  },
-  allDoneStatNumber: { 
-    fontSize: typography.fontSize['3xl'], 
-    fontWeight: typography.fontWeight.bold, 
-    color: colors.success[600],
-  },
-  allDoneStatLabel: { 
-    fontSize: typography.fontSize.sm, 
-    color: colors.success[600],
-  },
-  // Empty Day
-  emptyDayContainer: { alignItems: 'center', paddingVertical: spacing.xl },
-  emptyDayTitle: { fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.gray[900], marginTop: spacing.lg, marginBottom: spacing.sm },
-  emptyDayText: { fontSize: typography.fontSize.base, color: colors.gray[600], textAlign: 'center' },
-  // Quick Actions
-  quickActions: { flexDirection: 'row', gap: spacing.md },
-  quickActionCard: { flex: 1, backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center', justifyContent: 'center', minHeight: 90, ...shadows.sm },
-  quickActionIcon: { width: 44, height: 44, borderRadius: borderRadius.md, backgroundColor: colors.primary[50], alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
-  quickActionTitle: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: colors.gray[900], textAlign: 'center' },
+  content: { flex: 1 },
+  contentContainer: { padding: spacing.lg, paddingBottom: spacing.xxl },
+  progressSection: { marginBottom: spacing.md },
+  heroSection: { marginBottom: spacing.xl },
+  timelineSection: { flex: 1 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+  sectionTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.gray[900] },
+  sectionBadge: { backgroundColor: colors.gray[200], paddingHorizontal: spacing.sm, borderRadius: borderRadius.full, fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, color: colors.gray[700] },
+  emptyState: { padding: spacing.xl, alignItems: 'center', justifyContent: 'center' },
+  emptyStateText: { color: colors.gray[500], fontStyle: 'italic' },
+  modalContent: { paddingVertical: spacing.md },
+  modalText: { fontSize: typography.fontSize.lg, color: colors.gray[800], textAlign: 'center', marginBottom: spacing.lg },
 });

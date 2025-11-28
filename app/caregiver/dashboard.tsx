@@ -20,7 +20,7 @@ import { useScrollViewPadding } from '../../src/hooks/useScrollViewPadding';
 import {
   waitForFirebaseInitialization,
 } from '../../src/services/firebase';
-import { Button, Container } from '../../src/components/ui';
+import { Button, Container, Modal } from '../../src/components/ui';
 import { PatientWithDevice } from '../../src/types';
 import { ScreenWrapper, CaregiverHeader } from '../../src/components/caregiver';
 import { AutonomousModeBanner } from '../../src/components/caregiver/AutonomousModeBanner';
@@ -38,6 +38,11 @@ import { useDeviceState } from '../../src/hooks/useDeviceState';
 // Components
 import { StatusRibbon } from '../../src/components/caregiver/dashboard/StatusRibbon';
 import { CompactDeviceCard } from '../../src/components/caregiver/dashboard/CompactDeviceCard';
+import { CompactEventsList } from '../../src/components/caregiver/dashboard/CompactEventsList';
+import { collection, query, where, orderBy, limit, getFirestore } from 'firebase/firestore';
+import { useCollectionSWR } from '../../src/hooks/useCollectionSWR';
+import { getDbInstance } from '../../src/services/firebase';
+import { MedicationEvent } from '../../src/types';
 
 const SELECTED_PATIENT_KEY = '@caregiver_selected_patient';
 
@@ -72,6 +77,55 @@ function CaregiverDashboardContent() {
 
   // Get caregiver UID
   const caregiverUid = getAuth()?.currentUser?.uid || user?.id || null;
+
+  // --- Events Fetching ---
+  const [eventsQuery, setEventsQuery] = useState<any>(null);
+
+  useEffect(() => {
+    const buildQuery = async () => {
+      if (!selectedPatientId) {
+        setEventsQuery(null);
+        return;
+      }
+
+      const db = await getDbInstance();
+      if (!db) return;
+
+      // Query events for the selected patient
+      setEventsQuery(query(
+        collection(db, 'medicationEvents'),
+        where('patientId', '==', selectedPatientId),
+        orderBy('timestamp', 'desc'),
+        limit(5) // Show only recent 5 events
+      ));
+    };
+
+    buildQuery();
+  }, [selectedPatientId]);
+
+  const { data: recentEvents = [], isLoading: eventsLoading } = useCollectionSWR<MedicationEvent>({
+    cacheKey: `dashboard_events:${selectedPatientId}`,
+    query: eventsQuery,
+    initialData: [],
+    realtime: true,
+    enabled: !!selectedPatientId
+  });
+
+  // Map events to compact format
+  const compactEvents = useMemo(() => {
+    return recentEvents.map(e => ({
+      id: e.id,
+      timestamp: (e.timestamp as any) instanceof Object && 'toMillis' in (e.timestamp as any) ? (e.timestamp as any).toMillis() : new Date(e.timestamp).getTime(),
+      type: e.eventType === 'taken' ? 'INTAKE_TAKEN' : 
+            e.eventType === 'skipped' ? 'INTAKE_SKIPPED' : 
+            e.eventType === 'missed' ? 'INTAKE_MISSED' : 
+            e.eventType.toUpperCase(),
+      medicationName: e.medicationName,
+      status: e.status,
+      skipReason: e.skipReason
+    }));
+  }, [recentEvents]);
+
 
   // Load cached patient data on mount
   useEffect(() => {
@@ -133,7 +187,6 @@ function CaregiverDashboardContent() {
     setRetryCount(prev => prev + 1);
     setIsInitialized(false);
     setInitializationError(null);
-    // La inicialización se reintenta mediante el efecto y el contador
   }, []);
 
   // Fetch linked patients
@@ -361,6 +414,16 @@ function CaregiverDashboardContent() {
                 loading={deviceLoading}
               />
 
+              {/* Recent Events */}
+              <View style={styles.eventsContainer}>
+                <Text style={styles.sectionTitle}>Actividad Reciente</Text>
+                <CompactEventsList
+                  events={compactEvents}
+                  loading={eventsLoading || isLoading}
+                  onEventPress={() => handleNavigate('calendar')}
+                />
+              </View>
+
               {/* Quick Actions */}
               <View style={styles.quickActionsContainer}>
                 <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
@@ -393,7 +456,6 @@ function CaregiverDashboardContent() {
                   Configurar Dispositivo
                 </Button>
               </View>
-
             </Animated.View>
           )}
         </ScrollView>
@@ -519,6 +581,9 @@ const styles = StyleSheet.create({
   },
   emptyButton: {
     width: '100%',
+  },
+  eventsContainer: {
+    marginTop: spacing.md,
   },
   quickActionsContainer: {
     marginTop: spacing.md,

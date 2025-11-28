@@ -244,11 +244,27 @@ export const deleteAllIntakes = createAsyncThunk(
       
       const q = query(collection(db, 'intakeRecords'), where('patientId', '==', patientId));
       const snap = await getDocs(q);
-      const batch = writeBatch(db);
-      snap.forEach((d) => {
-        batch.delete(doc(db, 'intakeRecords', d.id));
-      });
-      await batch.commit();
+      
+      if (snap.empty) {
+        return { deleted: 0 };
+      }
+
+      const CHUNK_SIZE = 500;
+      const chunks = [];
+      const docs = snap.docs;
+
+      for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+        chunks.push(docs.slice(i, i + CHUNK_SIZE));
+      }
+
+      for (const chunk of chunks) {
+        const batch = writeBatch(db);
+        chunk.forEach((d) => {
+          batch.delete(doc(db, 'intakeRecords', d.id));
+        });
+        await batch.commit();
+      }
+      
       return { deleted: snap.size };
     } catch (error: any) {
       const intakeError = handleIntakeError(error);

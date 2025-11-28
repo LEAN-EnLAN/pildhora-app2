@@ -808,7 +808,7 @@ export interface NotificationPreferences {
  * const eventType: MedicationEventType = 'created';
  * ```
  */
-export type MedicationEventType = 'created' | 'updated' | 'deleted';
+export type MedicationEventType = 'created' | 'updated' | 'deleted' | 'taken' | 'skipped' | 'missed';
 
 /**
  * EventSyncStatus
@@ -850,7 +850,7 @@ export interface MedicationEventChange {
 /**
  * MedicationEvent interface
  * 
- * Represents a medication lifecycle event (created, updated, deleted).
+ * Represents a medication lifecycle event (created, updated, deleted) OR an intake event.
  * Used for the caregiver notification system and event registry.
  * Includes a snapshot of medication data and change tracking for updates.
  * 
@@ -896,6 +896,10 @@ export interface MedicationEvent {
   syncStatus: EventSyncStatus;
   /** Array of field changes (only for update events) */
   changes?: MedicationEventChange[];
+  /** Status of the intake (only for intake events) */
+  status?: 'taken' | 'missed' | 'skipped';
+  /** Reason for skipping the dose (only for skipped events) */
+  skipReason?: string;
 }
 
 // ============================================================================

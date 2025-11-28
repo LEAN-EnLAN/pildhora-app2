@@ -4,12 +4,13 @@ import { useRouter } from 'expo-router';
 import { useSelector } from 'react-redux';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { collection, query, where, orderBy, getFirestore } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getFirestore } from 'firebase/firestore';
 
 import { RootState } from '../../../src/store';
-import { MedicationEvent, Medication } from '../../../src/types';
+import { MedicationEvent, Medication, PatientWithDevice } from '../../../src/types';
 import { ScreenWrapper } from '../../../src/components/caregiver';
 import { Container } from '../../../src/components/ui';
+import PatientSelector from '../../../src/components/caregiver/PatientSelector';
 import { CalendarView } from '../../../src/components/caregiver/calendar/CalendarView';
 import { DayDetail } from '../../../src/components/caregiver/calendar/DayDetail';
 import { AdherenceChart, AdherenceDay } from '../../../src/components/caregiver/calendar/AdherenceChart';
@@ -28,6 +29,7 @@ export default function CalendarScreen() {
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
 
   // Get linked patients
@@ -60,36 +62,20 @@ export default function CalendarScreen() {
       // We fetch all events for the patients to calculate adherence correctly across the month
       // Optimally, we would filter by date range in Firestore, but for now we'll fetch recent history
       // or implement a month-based query if the index exists.
-      // Given the previous implementation, let's try to filter by date if possible, 
-      // or fetch a reasonable amount and filter client-side.
       
-      // Note: Firestore range queries on 'timestamp' are good.
-      // But we need to filter by patientId IN [...] which requires a specific index with timestamp.
-      // If we don't have that index, we might need to query per patient or just fetch last N events.
-      // Let's assume we can fetch by patientId (if single) or just fetch all for caregiver's patients.
-      
-      // For simplicity and to ensure we get data, let's use the existing pattern of fetching by patientId
-      // If multiple patients, we might need multiple queries or a composite query.
-      // Let's assume we select the first patient or aggregate.
-      // The dashboard selected a patient. Here, the calendar should probably show ALL or allow selection.
-      // User said: "comprehensive calendar system".
-      // Let's query events for all linked patients.
-      
-      const patientIds = patients.map(p => p.id);
-      if (patientIds.length === 0) return;
-
-      // Querying with 'in' operator for patientId and range for timestamp requires index.
-      // Fallback: Query by patientId 'in' and client-side filter for date, limit to reasonable number (e.g. 500)
+      // UPDATED: Query by caregiverId to support all patients without limit
+      // This replaces the previous 'in' query which was limited to 10 patients.
+      // We fetch events for the caregiver and filter by patient client-side.
       setEventsQuery(query(
         collection(db, 'medicationEvents'),
-        where('patientId', 'in', patientIds.slice(0, 10)), // Limit to 10 patients for 'in' query limit
+        where('caregiverId', '==', user.id),
         orderBy('timestamp', 'desc'),
-        // limit(500) // Fetch enough for the month
+        limit(1000) // Safety limit for performance
       ));
     };
 
     buildQuery();
-  }, [user?.id, patients, currentDate]); // Re-build if month changes? No, just fetch all and filter client side for now to be safe.
+  }, [user?.id, patients, currentDate]); // Re-build if user changes
 
   const { data: allEvents = [], isLoading: eventsLoading, error: eventsError, mutate } = useCollectionSWR<MedicationEvent>({
     cacheKey: `calendar_events:${user?.id}:${monthRange.start.getTime()}`, // Update cache key when month changes
@@ -103,9 +89,14 @@ export default function CalendarScreen() {
     const monthStart = monthRange.start.getTime();
     const monthEnd = monthRange.end.getTime();
     
-    const mEvents = allEvents.filter(e => {
+    // Filter by selected patient first
+    const patientEvents = selectedPatientId 
+      ? allEvents.filter(e => e.patientId === selectedPatientId)
+      : allEvents;
+
+    const mEvents = patientEvents.filter(e => {
       // Handle timestamp: Firestore Timestamp or number/string
-      const ts = e.timestamp instanceof Object && 'toMillis' in e.timestamp ? e.timestamp.toMillis() : new Date(e.timestamp).getTime();
+      const ts = (e.timestamp as any) instanceof Object && 'toMillis' in (e.timestamp as any) ? (e.timestamp as any).toMillis() : new Date(e.timestamp).getTime();
       return ts >= monthStart && ts <= monthEnd;
     });
 
@@ -114,13 +105,13 @@ export default function CalendarScreen() {
     const selectedEnd = new Date(selectedDate);
     selectedEnd.setHours(23, 59, 59, 999);
 
-    const dEvents = allEvents.filter(e => {
-      const ts = e.timestamp instanceof Object && 'toMillis' in e.timestamp ? e.timestamp.toMillis() : new Date(e.timestamp).getTime();
+    const dEvents = patientEvents.filter(e => {
+      const ts = (e.timestamp as any) instanceof Object && 'toMillis' in (e.timestamp as any) ? (e.timestamp as any).toMillis() : new Date(e.timestamp).getTime();
       return ts >= selectedStart.getTime() && ts <= selectedEnd.getTime();
     });
 
     return { monthEvents: mEvents, selectedDayEvents: dEvents };
-  }, [allEvents, monthRange, selectedDate]);
+  }, [allEvents, monthRange, selectedDate, selectedPatientId]);
 
   // Calculate Adherence Data for dots
   const adherenceData = useMemo(() => {
@@ -129,7 +120,7 @@ export default function CalendarScreen() {
     // Group events by day
     const eventsByDay: Record<string, MedicationEvent[]> = {};
     monthEvents.forEach(e => {
-      const ts = e.timestamp instanceof Object && 'toMillis' in e.timestamp ? e.timestamp.toMillis() : e.timestamp
+      const ts = (e.timestamp as any) instanceof Object && 'toMillis' in (e.timestamp as any) ? (e.timestamp as any).toMillis() : new Date(e.timestamp).getTime();
       const dateStr = format(new Date(ts), 'yyyy-MM-dd');
       if (!eventsByDay[dateStr]) eventsByDay[dateStr] = [];
       eventsByDay[dateStr].push(e);
@@ -194,7 +185,10 @@ export default function CalendarScreen() {
       const dayEnd = new Date(day).setHours(23, 59, 59, 999);
 
       const dayEvents = allEvents.filter(e => {
-        const ts = e.timestamp instanceof Object && 'toMillis' in e.timestamp ? e.timestamp.toMillis() : new Date(e.timestamp).getTime();
+        // Filter by patient if selected
+        if (selectedPatientId && e.patientId !== selectedPatientId) return false;
+
+        const ts = (e.timestamp as any) instanceof Object && 'toMillis' in (e.timestamp as any) ? (e.timestamp as any).toMillis() : new Date(e.timestamp).getTime();
         return ts >= dayStart && ts <= dayEnd;
       });
 
@@ -206,97 +200,100 @@ export default function CalendarScreen() {
       let percentage = 0;
       if (total > 0) {
         percentage = Math.round((taken / total) * 100);
+      } else if (isFuture) {
+        percentage = 0; // Future days show 0
+      } else {
+        // Past days with no events might be considered 0 or N/A. 
+        // For chart purposes, let's say 0 unless we know they had meds scheduled.
+        percentage = 0;
       }
 
-      let status: AdherenceDay['status'] = 'good';
-      if (isFuture) {
-          status = 'future';
-      } else if (total === 0) {
-          status = 'future'; // Treat no data as future/gray for now
-      } else {
-          if (percentage >= 80) status = 'good';
-          else if (percentage >= 50) status = 'warning';
-          else status = 'bad';
-      }
+      // AdherenceDay type expects: date: string, percentage: number, status: ...
+      const status: AdherenceDay['status'] = percentage >= 80 ? 'good' : percentage >= 50 ? 'warning' : 'danger';
 
       return {
-        day: format(day, 'EEE', { locale: es }), // e.g. 'dom'
+        date: dateStr,
         percentage,
         status,
-        dateStr
+        dayName: format(day, 'EEE', { locale: es }).toUpperCase() // MON, TUE, etc.
       };
     });
-  }, [selectedDate, allEvents]);
+  }, [allEvents, selectedDate, selectedPatientId]);
 
-  const handleRefresh = useCallback(async () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
-    await mutate();
-    setRefreshing(false);
+    mutate().finally(() => setRefreshing(false));
   }, [mutate]);
 
-  const handleEventPress = (event: MedicationEvent) => {
-    // Navigate to medication detail if patientId and medicationId are present
-    if (event.patientId && event.medicationId) {
-      router.push({
-        pathname: '/caregiver/medications/[patientId]/[id]',
-        params: { patientId: event.patientId, id: event.medicationId }
-      });
-    } else {
-      console.warn('Event missing patientId or medicationId', event);
-    }
-  };
-
-  if (eventsError) {
-    const categorized = categorizeError(eventsError);
-    return (
-      <ScreenWrapper>
-        <Container style={styles.container}>
-          <ErrorState
-            category={categorized.category}
-            message={categorized.userMessage}
-            onRetry={mutate}
-          />
-        </Container>
-      </ScreenWrapper>
-    );
-  }
+  // Navigation to medication details
+  const handleEventPress = useCallback((event: MedicationEvent) => {
+    // Navigate to patient's medication history or details
+    // For now, just go to the medications tab for that patient
+    router.push(`/caregiver/medications/${event.patientId}`);
+  }, [router]);
 
   return (
     <ScreenWrapper>
       <OfflineIndicator />
+      
+      {/* Patient Selector Header */}
+      <View style={styles.headerContainer}>
+        <PatientSelector
+          selectedPatientId={selectedPatientId}
+          onSelectPatient={setSelectedPatientId}
+          patients={patients}
+          showAllOption={true}
+        />
+      </View>
+
       <Container style={styles.container}>
-        <ScrollView
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-          }
+        <ScrollView 
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing || eventsLoading} onRefresh={onRefresh} />
+          }
         >
-          <View style={styles.calendarContainer}>
+          {/* Calendar View */}
+          <View style={styles.section}>
             <CalendarView
               currentDate={currentDate}
+              onDateChange={setCurrentDate}
               selectedDate={selectedDate}
-              onDateSelect={setSelectedDate}
-              onMonthChange={setCurrentDate}
-              adherenceData={adherenceData}
+              onSelectDate={setSelectedDate}
+              events={adherenceData}
             />
           </View>
 
-          <View style={styles.chartContainer}>
+          {/* Weekly Adherence Chart */}
+          <View style={styles.section}>
             <AdherenceChart 
-              weeklyStats={weeklyStats} 
-              loading={eventsLoading && !allEvents.length} 
+              data={weeklyStats}
+              title="Adherencia Semanal"
             />
           </View>
 
-          <View style={styles.detailContainer}>
+          {/* Selected Day Details */}
+          <View style={styles.section}>
             <DayDetail
               date={selectedDate}
               events={selectedDayEvents}
               stats={selectedDayStats}
-              loading={eventsLoading && !allEvents.length}
+              loading={eventsLoading}
               onEventPress={handleEventPress}
             />
           </View>
+
+          {/* Error State */}
+          {eventsError && (
+            <View style={styles.section}>
+              <ErrorState
+                category="server_error"
+                message="No se pudieron cargar los eventos"
+                onRetry={mutate}
+              />
+            </View>
+          )}
+          
         </ScrollView>
       </Container>
     </ScreenWrapper>
@@ -307,16 +304,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.gray[50],
+    paddingHorizontal: 0, 
   },
-  calendarContainer: {
-    padding: spacing.md,
+  headerContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
+    zIndex: 10,
   },
-  chartContainer: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-  },
-  detailContainer: {
-    flex: 1,
-    minHeight: 400, // Ensure minimum height for list
+  section: {
+    marginBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
 });

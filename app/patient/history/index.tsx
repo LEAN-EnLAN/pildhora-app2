@@ -4,12 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootState, AppDispatch } from "../../../src/store";
 import { fetchMedications } from "../../../src/store/slices/medicationsSlice";
 import { startIntakesSubscription, stopIntakesSubscription, deleteAllIntakes, updateIntakeStatus } from "../../../src/store/slices/intakesSlice";
 import { IntakeRecord, IntakeStatus } from "../../../src/types";
 import { waitForFirebaseInitialization } from "../../../src/services/firebase";
-import { LoadingSpinner, ErrorMessage, Modal, Button, BrandedEmptyState, AppBar } from "../../../src/components/ui";
+import { LoadingSpinner, ErrorMessage, Modal, Button, BrandedEmptyState, AppBar, Toast, ToastType } from "../../../src/components/ui";
 import { HistoryFilterBar, HistoryRecordCard } from "../../../src/components/screens/patient";
 import { colors, spacing, typography, borderRadius, shadows } from "../../../src/theme/tokens";
 
@@ -21,6 +22,8 @@ type EnrichedIntakeRecord = IntakeRecord & {
   };
 };
 
+const CLEARED_HISTORY_KEY = '@history_cleared_timestamp';
+
 export default function HistoryScreen() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
@@ -31,6 +34,13 @@ export default function HistoryScreen() {
   const [selectedFilter, setSelectedFilter] = useState<"all" | "taken" | "missed">("all");
   const [isInitialized, setIsInitialized] = useState(false);
   const [showClearAllModal, setShowClearAllModal] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [clearedTimestamp, setClearedTimestamp] = useState<number | null>(null);
+  const [toast, setToast] = useState<{ visible: boolean; message: string; type: ToastType }>({
+    visible: false,
+    message: '',
+    type: 'info',
+  });
 
   const patientId = user?.id;
 
@@ -39,6 +49,11 @@ export default function HistoryScreen() {
       try {
         await waitForFirebaseInitialization();
         setIsInitialized(true);
+        // Load cleared timestamp
+        const storedTimestamp = await AsyncStorage.getItem(CLEARED_HISTORY_KEY);
+        if (storedTimestamp) {
+          setClearedTimestamp(parseInt(storedTimestamp, 10));
+        }
       } catch (error: any) {
         // Firebase initialization failed - error will be handled by error state
       }
@@ -63,12 +78,20 @@ export default function HistoryScreen() {
   // Memoize filtered history
   const filteredHistory = useMemo(() => {
     return intakes.filter((record) => {
+      // Check if record is older than cleared timestamp
+      if (clearedTimestamp) {
+        const recordTime = new Date(record.scheduledTime).getTime();
+        if (recordTime <= clearedTimestamp) {
+          return false;
+        }
+      }
+
       if (selectedFilter === "all") return true;
       if (selectedFilter === "taken") return record.status === IntakeStatus.TAKEN;
       if (selectedFilter === "missed") return record.status === IntakeStatus.MISSED;
       return true;
     });
-  }, [intakes, selectedFilter]);
+  }, [intakes, selectedFilter, clearedTimestamp]);
 
   // Memoize enriched and grouped history
   const groupedHistory = useMemo(() => {
@@ -104,11 +127,34 @@ export default function HistoryScreen() {
   const handleClearAllData = useCallback(async () => {
     try {
       if (!patientId) return;
+      
+      setIsClearing(true);
+      
+      // 1. Backend deletion
       await dispatch(deleteAllIntakes(patientId)).unwrap();
+      
+      // 2. Local flag update (UI immediately reflects cleared state)
+      const now = Date.now();
+      await AsyncStorage.setItem(CLEARED_HISTORY_KEY, now.toString());
+      setClearedTimestamp(now);
+      
+      // 3. Visual feedback
       setShowClearAllModal(false);
+      setToast({
+        visible: true,
+        message: 'Historial eliminado correctamente',
+        type: 'success'
+      });
     } catch (error: any) {
-      // Error clearing history - modal will close and error state will be shown if needed
+      // Error handling
       setShowClearAllModal(false);
+      setToast({
+        visible: true,
+        message: 'Error al eliminar el historial. Inténtalo de nuevo.',
+        type: 'error'
+      });
+    } finally {
+      setIsClearing(false);
     }
   }, [patientId, dispatch]);
 
@@ -117,6 +163,11 @@ export default function HistoryScreen() {
       await dispatch(updateIntakeStatus({ id: recordId, status: IntakeStatus.MISSED })).unwrap();
     } catch (error: any) {
       // Error marking as missed - error state will be shown if needed
+      setToast({
+        visible: true,
+        message: 'Error al actualizar el estado',
+        type: 'error'
+      });
     }
   }, [dispatch]);
 
@@ -229,10 +280,18 @@ export default function HistoryScreen() {
         )}
       </ScrollView>
 
+      {/* Toast Notification */}
+      <Toast 
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast(prev => ({ ...prev, visible: false }))}
+      />
+
       {/* Clear All Confirmation Modal */}
       <Modal
         visible={showClearAllModal}
-        onClose={() => setShowClearAllModal(false)}
+        onClose={() => !isClearing && setShowClearAllModal(false)}
         title="Limpiar Historial"
         size="sm"
       >
@@ -245,6 +304,7 @@ export default function HistoryScreen() {
               variant="secondary"
               onPress={() => setShowClearAllModal(false)}
               style={styles.modalButton}
+              disabled={isClearing}
             >
               Cancelar
             </Button>
@@ -252,6 +312,8 @@ export default function HistoryScreen() {
               variant="danger"
               onPress={handleClearAllData}
               style={styles.modalButton}
+              loading={isClearing}
+              disabled={isClearing}
             >
               Limpiar todo
             </Button>

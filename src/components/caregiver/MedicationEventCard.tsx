@@ -9,7 +9,7 @@ import { getRelativeTimeString } from '../../utils/dateUtils';
 /**
  * Get icon name and color for event type
  */
-function getEventTypeIcon(eventType: MedicationEventType): { name: string; color: string; backgroundColor: string } {
+function getEventTypeIcon(eventType: MedicationEventType, status?: string): { name: string; color: string; backgroundColor: string } {
   switch (eventType) {
     case 'created':
       return {
@@ -29,6 +29,24 @@ function getEventTypeIcon(eventType: MedicationEventType): { name: string; color
         color: colors.error[500],
         backgroundColor: colors.error[50],
       };
+    case 'taken':
+      return {
+        name: 'checkmark-circle',
+        color: colors.success[500],
+        backgroundColor: colors.success[50],
+      };
+    case 'skipped':
+      return {
+        name: 'close-circle',
+        color: colors.warning[500],
+        backgroundColor: colors.warning[50],
+      };
+    case 'missed':
+      return {
+        name: 'alert-circle',
+        color: colors.error[500],
+        backgroundColor: colors.error[50],
+      };
     default:
       return {
         name: 'information-circle',
@@ -41,7 +59,7 @@ function getEventTypeIcon(eventType: MedicationEventType): { name: string; color
 /**
  * Get human-readable event type text
  */
-function getEventTypeText(eventType: MedicationEventType): string {
+function getEventTypeText(eventType: MedicationEventType, status?: string): string {
   switch (eventType) {
     case 'created':
       return 'Creó';
@@ -49,6 +67,12 @@ function getEventTypeText(eventType: MedicationEventType): string {
       return 'Actualizó';
     case 'deleted':
       return 'Eliminó';
+    case 'taken':
+      return 'Tomó';
+    case 'skipped':
+      return 'Omitió';
+    case 'missed':
+      return 'Olvidó';
     default:
       return 'Modificó';
   }
@@ -87,8 +111,8 @@ export const MedicationEventCard: React.FC<MedicationEventCardProps> = React.mem
   event,
   onPress,
 }) => {
-  const iconConfig = getEventTypeIcon(event.eventType);
-  const eventTypeText = getEventTypeText(event.eventType);
+  const iconConfig = getEventTypeIcon(event.eventType, event.status);
+  const eventTypeText = getEventTypeText(event.eventType, event.status);
   const relativeTime = getRelativeTimeString(event.timestamp);
   const changeSummary = getChangeSummary(event);
 
@@ -125,6 +149,13 @@ export const MedicationEventCard: React.FC<MedicationEventCardProps> = React.mem
           {changeSummary && (
             <Text style={styles.changeSummary} numberOfLines={2}>
               {changeSummary}
+            </Text>
+          )}
+
+          {/* Skip Reason Display */}
+          {event.skipReason && (
+            <Text style={styles.skipReason} numberOfLines={2}>
+              Motivo: {event.skipReason}
             </Text>
           )}
 
@@ -185,6 +216,12 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.gray[600],
     fontStyle: 'italic',
+  },
+  skipReason: {
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[700],
+    fontStyle: 'italic',
+    marginTop: 2,
   },
   timestampRow: {
     flexDirection: 'row',

@@ -17,6 +17,7 @@ interface MedicationEvent {
   type: string;
   medicationName?: string;
   status?: string;
+  skipReason?: string;
 }
 
 interface CompactEventsListProps {
@@ -65,6 +66,10 @@ export const CompactEventsList: React.FC<CompactEventsListProps> = ({
           iconName = 'checkmark-circle';
           iconColor = colors.success[500];
           label = 'Tomado';
+        } else if (event.type === 'INTAKE_SKIPPED') {
+          iconName = 'close-circle';
+          iconColor = colors.warning[500];
+          label = 'Omitido';
         } else if (event.type === 'DEVICE_OFFLINE') {
           iconName = 'cloud-offline';
           iconColor = colors.warning[500];
@@ -86,9 +91,14 @@ export const CompactEventsList: React.FC<CompactEventsListProps> = ({
               <Text style={styles.mainText} numberOfLines={1}>
                 {event.medicationName || label}
               </Text>
-              {event.medicationName && (
+              <View>
                 <Text style={styles.subText}>{label}</Text>
-              )}
+                {event.skipReason && (
+                  <Text style={styles.skipReasonText} numberOfLines={1}>
+                    Motivo: {event.skipReason}
+                  </Text>
+                )}
+              </View>
             </View>
 
             <Ionicons name={iconName} size={20} color={iconColor} />
@@ -135,6 +145,12 @@ const styles = StyleSheet.create({
   subText: {
     fontSize: typography.fontSize.xs,
     color: colors.gray[500],
+  },
+  skipReasonText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[700],
+    fontStyle: 'italic',
+    marginTop: 2,
   },
   loadingContainer: {
     padding: spacing.md,
