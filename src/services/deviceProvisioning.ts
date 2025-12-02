@@ -1,4 +1,4 @@
-import { getAuthInstance, getDbInstance, getRdbInstance } from './firebase';
+import { getAuthInstance, getDbInstance, getDeviceRdbInstance } from './firebase';
 import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { ref, set } from 'firebase/database';
 import { linkDeviceToUser } from './deviceLinking';
@@ -196,7 +196,7 @@ export async function provisionDevice(data: DeviceProvisioningData): Promise<voi
     await validateAuthentication(data.userId);
     
     const db = await getDbInstance();
-    const rdb = await getRdbInstance();
+    const rdb = await getDeviceRdbInstance();
     
     if (!db || !rdb) {
       throw new DeviceProvisioningError(

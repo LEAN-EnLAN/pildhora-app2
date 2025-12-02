@@ -13,7 +13,6 @@ import {
   Platform,
   StyleSheet,
   TouchableOpacity,
-  Switch,
   AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,12 +30,19 @@ import AppIcon from '../../src/components/ui/AppIcon';
 import BrandedLoadingScreen from '../../src/components/ui/BrandedLoadingScreen';
 import { startDeviceListener, stopDeviceListener } from '../../src/store/slices/deviceSlice';
 import { Medication, IntakeStatus } from '../../src/types';
-import { getDbInstance, getRdbInstance } from '../../src/services/firebase';
+import { getDbInstance, getRdbInstance, getDeviceRdbInstance } from '../../src/services/firebase';
 import { addDoc, collection, Timestamp } from 'firebase/firestore';
 import { ref, get as rdbGet } from 'firebase/database';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/theme/tokens';
 import { usePatientAutonomousMode } from '../../src/hooks/usePatientAutonomousMode';
-import { setAutonomousMode } from '../../src/services/autonomousMode';
+import { useTopoAlarm } from '../../src/hooks/useTopoAlarm';
+import { useScheduleSync } from '../../src/hooks/useScheduleSync';
+import { TopoAlarmOverlay } from '../../src/components/shared/TopoAlarmOverlay';
+import { 
+  recordTopoIntake, 
+  createTopoCriticalEvent, 
+  getScheduledTimeForMedication 
+} from '../../src/services/topoAlarmService';
 
 const DAY_ABBREVS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const getTodayAbbrev = () => DAY_ABBREVS[new Date().getDay()];
@@ -74,8 +80,6 @@ const getCurrentTimeDecimal = () => {
 // HERO CARD - With integrated adherence
 // ============================================================================
 interface HeroCardProps {
-  isAutonomous: boolean;
-  onToggleAutonomous: (value: boolean) => void;
   medicationName: string;
   dosage: string;
   scheduledTime: string;
@@ -93,7 +97,6 @@ interface HeroCardProps {
 }
 
 const HeroCard = React.memo(function HeroCard({
-  isAutonomous, onToggleAutonomous,
   medicationName, dosage, scheduledTime, icon = '💊',
   onTake, onSkip, loading = false, isCompleted = false, completedAt,
   minutesUntilDue, isOverdue = false, takenCount, totalCount, isOnline = true,
@@ -126,7 +129,7 @@ const HeroCard = React.memo(function HeroCard({
       {/* Offline Banner inside Card if offline */}
       {!isOnline && (
         <View style={heroStyles.offlineBanner}>
-          <Ionicons name="cloud-offline" size={16} color={colors.warning[700]} />
+          <Ionicons name="cloud-offline" size={16} color={colors.warning[600]} />
           <Text style={heroStyles.offlineText}>Sin conexión - Modo local</Text>
         </View>
       )}
@@ -149,16 +152,6 @@ const HeroCard = React.memo(function HeroCard({
         </View>
         <View style={heroStyles.adherenceContainer}>
           <Text style={[heroStyles.adherenceLabel, { fontSize: typography.fontSize.xl, fontWeight: 'bold', color: colors.primary[600], marginTop: 0 }]}>{takenCount}/{totalCount}</Text>
-          <View style={heroStyles.autonomousWrapper}>
-             <Text style={heroStyles.autonomousLabel}>Autónomo</Text>
-             <Switch
-               value={isAutonomous}
-               onValueChange={onToggleAutonomous}
-               trackColor={{ false: colors.gray[200], true: colors.primary[500] }}
-               thumbColor={colors.surface}
-               style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-             />
-          </View>
         </View>
       </View>
 
@@ -201,8 +194,6 @@ const heroStyles = StyleSheet.create({
   overdueText: { fontSize: typography.fontSize.sm, color: colors.error[500], fontWeight: typography.fontWeight.semibold, marginTop: spacing.xs },
   adherenceContainer: { alignItems: 'flex-end' },
   adherenceLabel: { fontSize: typography.fontSize.xs, color: colors.gray[500], marginTop: spacing.xs },
-  autonomousWrapper: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  autonomousLabel: { fontSize: 10, color: colors.gray[500], fontWeight: '600' },
   medicationSection: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.gray[50], borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.sm },
   iconContainer: { width: 48, height: 48, borderRadius: borderRadius.lg, backgroundColor: colors.primary[50], alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
   iconEmoji: { fontSize: 24 },
@@ -221,7 +212,7 @@ const heroStyles = StyleSheet.create({
   completedMedName: { fontSize: typography.fontSize.lg, color: colors.gray[700], marginBottom: spacing.xs },
   completedTime: { fontSize: typography.fontSize.base, color: colors.gray[500] },
   offlineBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.warning[100], paddingVertical: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: borderRadius.md, marginBottom: spacing.sm, gap: spacing.xs },
-  offlineText: { fontSize: typography.fontSize.xs, color: colors.warning[800], fontWeight: typography.fontWeight.semibold },
+  offlineText: { fontSize: typography.fontSize.xs, color: colors.warning[600], fontWeight: typography.fontWeight.semibold },
 });
 
 
@@ -354,7 +345,7 @@ export default function PatientHome() {
   const initDevice = useCallback(async () => {
     try {
       if (!patientId) return;
-      const rdb = await getRdbInstance();
+      const rdb = await getDeviceRdbInstance();
       if (!rdb) return;
       const snap = await rdbGet(ref(rdb, `users/${patientId}/devices`));
       const deviceIds = Object.keys(snap.val() || {});
@@ -368,6 +359,193 @@ export default function PatientHome() {
   useEffect(() => { const sub = AppState.addEventListener('change', (s) => { if (s === 'active') initDevice(); }); return () => sub.remove(); }, [initDevice]);
   useFocusEffect(useCallback(() => { initDevice(); }, [initDevice]));
 
+  // ============================================================================
+  // TOPO ALARM INTEGRATION
+  // ============================================================================
+  const todayMedications = useMemo(() => {
+    return medications.filter(isScheduledToday);
+  }, [medications]);
+
+  const {
+    isActive: isTopoActive,
+    activeMedication: topoMedication,
+    hasTimedOut: topoTimedOut,
+    dismissAlarm,
+  } = useTopoAlarm({
+    deviceId: activeDeviceId || user?.deviceId,
+    enabled: !!(activeDeviceId || user?.deviceId),
+    todayMedications,
+    timeoutMs: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // ============================================================================
+  // SCHEDULE SYNC - Auto-sync medications to RTDB turnos
+  // ============================================================================
+  const { syncing: scheduleSyncing, activeTurnos } = useScheduleSync({
+    deviceId: activeDeviceId || user?.deviceId,
+    autoSync: true, // Automatically sync when medications change
+  });
+
+  // Handle topo alarm becoming active - notify caregiver
+  useEffect(() => {
+    if (isTopoActive && topoMedication && !isAutonomous && user?.id) {
+      // Find caregiver ID from medication
+      const caregiverId = topoMedication.caregiverId;
+      if (caregiverId) {
+        createTopoCriticalEvent('topo_started', {
+          patientId: user.id,
+          patientName: user.name || 'Paciente',
+          caregiverId,
+          medicationName: topoMedication.name,
+          deviceId: activeDeviceId || user.deviceId,
+        }).catch(console.error);
+      }
+    }
+  }, [isTopoActive, topoMedication, isAutonomous, user, activeDeviceId]);
+
+  // Handle topo timeout - notify caregiver
+  useEffect(() => {
+    if (topoTimedOut && topoMedication && !isAutonomous && user?.id) {
+      const caregiverId = topoMedication.caregiverId;
+      if (caregiverId) {
+        createTopoCriticalEvent('topo_timeout', {
+          patientId: user.id,
+          patientName: user.name || 'Paciente',
+          caregiverId,
+          medicationName: topoMedication.name,
+          deviceId: activeDeviceId || user.deviceId,
+        }).catch(console.error);
+      }
+    }
+  }, [topoTimedOut, topoMedication, isAutonomous, user, activeDeviceId]);
+
+  // Handle topo alarm take action (autonomous mode)
+  const handleTopoTake = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      setTakingLoading(true);
+
+      if (topoMedication) {
+        // Record intake
+        await recordTopoIntake({
+          medicationId: topoMedication.id,
+          medicationName: topoMedication.name,
+          dosage: topoMedication.dosage || `${topoMedication.doseValue || ''} ${topoMedication.doseUnit || ''}`.trim(),
+          patientId: user.id,
+          patientName: user.name || 'Paciente',
+          caregiverId: topoMedication.caregiverId,
+          deviceId: activeDeviceId || user.deviceId,
+          scheduledTime: getScheduledTimeForMedication(topoMedication),
+          resolution: 'taken',
+          isAutonomous: true,
+        });
+
+        // Notify caregiver
+        if (topoMedication.caregiverId) {
+          await createTopoCriticalEvent('topo_taken', {
+            patientId: user.id,
+            patientName: user.name || 'Paciente',
+            caregiverId: topoMedication.caregiverId,
+            medicationName: topoMedication.name,
+            deviceId: activeDeviceId || user.deviceId,
+          });
+        }
+      } else {
+        console.warn('[PatientHome] No medication identified for topo alarm');
+        Alert.alert('Información', 'Se desactivó la alarma pero no se pudo identificar el medicamento para el historial.');
+      }
+
+      // Dismiss alarm (set topo to false)
+      await dismissAlarm();
+    } catch (error) {
+      console.error('[PatientHome] Error handling topo take:', error);
+      Alert.alert('Error', 'No se pudo registrar la dosis. Intenta nuevamente.');
+    } finally {
+      setTakingLoading(false);
+    }
+  }, [topoMedication, user, activeDeviceId, dismissAlarm]);
+
+  // Handle topo alarm skip action (autonomous mode)
+  const handleTopoSkip = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      setTakingLoading(true);
+
+      if (topoMedication) {
+        // Record as missed/skipped
+        await recordTopoIntake({
+          medicationId: topoMedication.id,
+          medicationName: topoMedication.name,
+          dosage: topoMedication.dosage || `${topoMedication.doseValue || ''} ${topoMedication.doseUnit || ''}`.trim(),
+          patientId: user.id,
+          patientName: user.name || 'Paciente',
+          caregiverId: topoMedication.caregiverId,
+          deviceId: activeDeviceId || user.deviceId,
+          scheduledTime: getScheduledTimeForMedication(topoMedication),
+          resolution: 'skipped',
+          isAutonomous: true,
+        });
+
+        // Notify caregiver
+        if (topoMedication.caregiverId) {
+          await createTopoCriticalEvent('topo_missed', {
+            patientId: user.id,
+            patientName: user.name || 'Paciente',
+            caregiverId: topoMedication.caregiverId,
+            medicationName: topoMedication.name,
+            deviceId: activeDeviceId || user.deviceId,
+          });
+        }
+      } else {
+        console.warn('[PatientHome] No medication identified for topo alarm skip');
+      }
+
+      // Dismiss alarm
+      await dismissAlarm();
+    } catch (error) {
+      console.error('[PatientHome] Error handling topo skip:', error);
+      Alert.alert('Error', 'No se pudo omitir la dosis. Intenta nuevamente.');
+    } finally {
+      setTakingLoading(false);
+    }
+  }, [topoMedication, user, activeDeviceId, dismissAlarm]);
+
+  // Handle supervised mode dismiss (device button pressed, topo became false)
+  const handleTopoDismiss = useCallback(async () => {
+    if (!topoMedication || !user?.id || isAutonomous) return;
+
+    try {
+      // In supervised mode, when topo goes false, it means the device button was pressed
+      // Record as taken
+      await recordTopoIntake({
+        medicationId: topoMedication.id,
+        medicationName: topoMedication.name,
+        dosage: topoMedication.dosage || `${topoMedication.doseValue || ''} ${topoMedication.doseUnit || ''}`.trim(),
+        patientId: user.id,
+        patientName: user.name || 'Paciente',
+        caregiverId: topoMedication.caregiverId,
+        deviceId: activeDeviceId || user.deviceId,
+        scheduledTime: getScheduledTimeForMedication(topoMedication),
+        resolution: 'taken',
+        isAutonomous: false,
+      });
+
+      // Notify caregiver
+      if (topoMedication.caregiverId) {
+        await createTopoCriticalEvent('topo_taken', {
+          patientId: user.id,
+          patientName: user.name || 'Paciente',
+          caregiverId: topoMedication.caregiverId,
+          medicationName: topoMedication.name,
+          deviceId: activeDeviceId || user.deviceId,
+        });
+      }
+    } catch (error) {
+      console.error('[PatientHome] Error handling supervised dismiss:', error);
+    }
+  }, [topoMedication, user, activeDeviceId, isAutonomous]);
 
   // ============================================================================
   // FIXED: Build all doses for today with proper completion tracking
@@ -634,6 +812,17 @@ export default function PatientHome() {
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
+      {/* Topo Alarm Overlay */}
+      <TopoAlarmOverlay
+        visible={isTopoActive}
+        medication={topoMedication}
+        isAutonomous={isAutonomous}
+        hasTimedOut={topoTimedOut}
+        onTake={handleTopoTake}
+        onSkip={handleTopoSkip}
+        onDismiss={handleTopoDismiss}
+      />
+
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -682,8 +871,6 @@ export default function PatientHome() {
         {nextDose ? (
           <View style={styles.heroSection}>
             <HeroCard
-              isAutonomous={isAutonomous}
-              onToggleAutonomous={handleToggleAutonomous}
               medicationName={nextDose.medicationName}
               dosage={nextDose.dosage}
               scheduledTime={nextDose.scheduledTime}
@@ -748,17 +935,32 @@ export default function PatientHome() {
         {/* Quick Actions */}
         <View style={styles.section}>
           <View style={styles.quickActions}>
-            <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push('/patient/medications')}>
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => router.push('/patient/medications')}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir medicamentos"
+            >
               <View style={styles.quickActionIcon}><Ionicons name="medkit" size={24} color={colors.primary[500]} /></View>
-              <Text style={styles.quickActionTitle}>Medicamentos</Text>
+              <Text style={styles.quickActionHint}>Med</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push('/patient/history')}>
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => router.push('/patient/history')}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir historial"
+            >
               <View style={styles.quickActionIcon}><Ionicons name="time-outline" size={24} color={colors.primary[500]} /></View>
-              <Text style={styles.quickActionTitle}>Historial</Text>
+              <Text style={styles.quickActionHint}>Hist</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push('/patient/device-settings')}>
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => router.push('/patient/device-settings')}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir ajustes de dispositivo"
+            >
               <View style={styles.quickActionIcon}><Ionicons name="hardware-chip-outline" size={24} color={colors.primary[500]} /></View>
-              <Text style={styles.quickActionTitle}>Dispositivo</Text>
+              <Text style={styles.quickActionHint}>Disp</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -838,5 +1040,5 @@ const styles = StyleSheet.create({
   quickActions: { flexDirection: 'row', gap: spacing.md },
   quickActionCard: { flex: 1, backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center', justifyContent: 'center', minHeight: 90, ...shadows.sm },
   quickActionIcon: { width: 44, height: 44, borderRadius: borderRadius.md, backgroundColor: colors.primary[50], alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
-  quickActionTitle: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: colors.gray[900], textAlign: 'center' },
+  quickActionHint: { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, color: colors.gray[500], textAlign: 'center', letterSpacing: 0.2 },
 });

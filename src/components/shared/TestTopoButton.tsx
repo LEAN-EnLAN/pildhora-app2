@@ -13,7 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { ref, set, onValue, off } from 'firebase/database';
-import { getRdbInstance } from '../../services/firebase';
+import { getDeviceRdbInstance } from '../../services/firebase';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme/tokens';
 
 interface TestTopoButtonProps {
@@ -43,7 +43,7 @@ export const TestTopoButton = ({ deviceId = 'TEST-DEVICE-001' }: TestTopoButtonP
     let unsubscribe: (() => void) | undefined;
     
     const setupListener = async () => {
-      const rdb = await getRdbInstance();
+      const rdb = await getDeviceRdbInstance();
       if (!rdb) return;
       
       const pathRef = ref(rdb, `devices/${deviceId}/commands/topo`);
@@ -94,7 +94,7 @@ export const TestTopoButton = ({ deviceId = 'TEST-DEVICE-001' }: TestTopoButtonP
   const handlePress = useCallback(async () => {
     setLoading(true);
     try {
-      const rdb = await getRdbInstance();
+      const rdb = await getDeviceRdbInstance();
       if (!rdb) {
         Alert.alert('Error', 'Firebase Database not initialized');
         return;
@@ -104,6 +104,25 @@ export const TestTopoButton = ({ deviceId = 'TEST-DEVICE-001' }: TestTopoButtonP
       Alert.alert('Éxito', `Se ha enviado la señal TOPO al dispositivo ${deviceId}. El dispositivo iniciará la secuencia.`);
     } catch (error: any) {
       console.error('Test Topo Error:', error);
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [deviceId]);
+
+  // Quick stop handler - sets topo to false
+  const handleStop = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rdb = await getDeviceRdbInstance();
+      if (!rdb) {
+        Alert.alert('Error', 'Firebase Database not initialized');
+        return;
+      }
+      const actionPath = `devices/${deviceId}/commands/topo`;
+      await set(ref(rdb, actionPath), false);
+    } catch (error: any) {
+      console.error('Stop Topo Error:', error);
       Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
@@ -125,11 +144,11 @@ export const TestTopoButton = ({ deviceId = 'TEST-DEVICE-001' }: TestTopoButtonP
       <TouchableOpacity
         onPress={handlePress}
         activeOpacity={0.8}
-        disabled={loading}
+        disabled={loading || topoState === true}
         accessibilityLabel="Probar dispositivo TOPO"
         accessibilityHint={`Envía una señal de prueba al dispositivo ${deviceId}`}
         accessibilityRole="button"
-        accessibilityState={{ disabled: loading, checked: topoState || false }}
+        accessibilityState={{ disabled: loading || topoState === true, checked: topoState || false }}
       >
         <LinearGradient
           colors={topoState ? colors.gradients.sunset : [colors.primary[500], colors.primary[600]]}
@@ -175,8 +194,21 @@ export const TestTopoButton = ({ deviceId = 'TEST-DEVICE-001' }: TestTopoButtonP
         </LinearGradient>
       </TouchableOpacity>
       
-      {/* Optional: Add a subtle connection status indicator below if needed, 
-          but the button itself now communicates state clearly. */}
+      {/* Quick Stop Button - Only visible when TOPO is active */}
+      {topoState && (
+        <TouchableOpacity
+          onPress={handleStop}
+          activeOpacity={0.8}
+          disabled={loading}
+          style={styles.stopButton}
+          accessibilityLabel="Detener TOPO"
+          accessibilityHint="Apaga la señal TOPO inmediatamente"
+          accessibilityRole="button"
+        >
+          <Ionicons name="stop-circle" size={20} color="white" />
+          <Text style={styles.stopButtonText}>Apagar TOPO</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -244,6 +276,22 @@ const styles = StyleSheet.create({
   statusText: {
     color: 'white',
     fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+  },
+  stopButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.error[600],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  stopButtonText: {
+    color: 'white',
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.bold,
   },
 });

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { collection, query, where, getDocs, limit, doc, getDoc } from 'firebase/firestore';
-import { getDbInstance, getRdbInstance } from '../services/firebase';
+import { getDbInstance, getDeviceRdbInstance } from '../services/firebase';
 import { ref, get } from 'firebase/database';
 import { PatientWithDevice, DeviceState } from '../types';
 
@@ -54,7 +54,7 @@ export function useCaregiverDevices({
 
         try {
             const db = await getDbInstance();
-            const rdb = await getRdbInstance();
+            const rdb = await getDeviceRdbInstance();
 
             if (!db || !rdb) {
                 throw new Error('Firebase services not available');

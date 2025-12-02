@@ -2,12 +2,12 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSelector } from 'react-redux';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { collection, query, where, orderBy, getFirestore } from 'firebase/firestore';
+import { collection, query, where, orderBy } from 'firebase/firestore';
 
 import { RootState } from '../../../src/store';
-import { MedicationEvent, Medication } from '../../../src/types';
+import { IntakeRecord, IntakeStatus } from '../../../src/types';
 import { ScreenWrapper } from '../../../src/components/caregiver';
 import { Container } from '../../../src/components/ui';
 import { CalendarView } from '../../../src/components/caregiver/calendar/CalendarView';
@@ -63,49 +63,44 @@ export default function CalendarScreen() {
       // Given the previous implementation, let's try to filter by date if possible, 
       // or fetch a reasonable amount and filter client-side.
       
-      // Note: Firestore range queries on 'timestamp' are good.
-      // But we need to filter by patientId IN [...] which requires a specific index with timestamp.
-      // If we don't have that index, we might need to query per patient or just fetch last N events.
-      // Let's assume we can fetch by patientId (if single) or just fetch all for caregiver's patients.
-      
-      // For simplicity and to ensure we get data, let's use the existing pattern of fetching by patientId
-      // If multiple patients, we might need multiple queries or a composite query.
-      // Let's assume we select the first patient or aggregate.
-      // The dashboard selected a patient. Here, the calendar should probably show ALL or allow selection.
-      // User said: "comprehensive calendar system".
-      // Let's query events for all linked patients.
+      // Query intakeRecords for adherence tracking
+      // intakeRecords have status field (taken, missed, skipped, pending)
       
       const patientIds = patients.map(p => p.id);
       if (patientIds.length === 0) return;
 
-      // Querying with 'in' operator for patientId and range for timestamp requires index.
-      // Fallback: Query by patientId 'in' and client-side filter for date, limit to reasonable number (e.g. 500)
+      // Querying with 'in' operator for patientId - limit to 10 patients for Firestore 'in' query limit
       setEventsQuery(query(
-        collection(db, 'medicationEvents'),
-        where('patientId', 'in', patientIds.slice(0, 10)), // Limit to 10 patients for 'in' query limit
-        orderBy('timestamp', 'desc'),
-        // limit(500) // Fetch enough for the month
+        collection(db, 'intakeRecords'),
+        where('patientId', 'in', patientIds.slice(0, 10)),
+        orderBy('scheduledTime', 'desc'),
       ));
     };
 
     buildQuery();
   }, [user?.id, patients, currentDate]); // Re-build if month changes? No, just fetch all and filter client side for now to be safe.
 
-  const { data: allEvents = [], isLoading: eventsLoading, error: eventsError, mutate } = useCollectionSWR<MedicationEvent>({
-    cacheKey: `calendar_events:${user?.id}:${monthRange.start.getTime()}`, // Update cache key when month changes
+  const { data: allRecords = [], isLoading: eventsLoading, error: eventsError, mutate } = useCollectionSWR<IntakeRecord>({
+    cacheKey: `calendar_intake:${user?.id}:${monthRange.start.getTime()}`,
     query: eventsQuery,
     initialData: [],
     realtime: true,
   });
 
-  // Filter events for the displayed month and selected date
-  const { monthEvents, selectedDayEvents } = useMemo(() => {
+  // Helper to get timestamp from IntakeRecord
+  const getRecordTimestamp = (record: IntakeRecord): number => {
+    const ts = record.scheduledTime;
+    if (ts instanceof Object && 'toMillis' in ts) return (ts as any).toMillis();
+    return new Date(ts as string | Date).getTime();
+  };
+
+  // Filter records for the displayed month and selected date
+  const { monthRecords, selectedDayRecords } = useMemo(() => {
     const monthStart = monthRange.start.getTime();
     const monthEnd = monthRange.end.getTime();
     
-    const mEvents = allEvents.filter(e => {
-      // Handle timestamp: Firestore Timestamp or number/string
-      const ts = e.timestamp instanceof Object && 'toMillis' in e.timestamp ? e.timestamp.toMillis() : new Date(e.timestamp).getTime();
+    const mRecords = allRecords.filter(r => {
+      const ts = getRecordTimestamp(r);
       return ts >= monthStart && ts <= monthEnd;
     });
 
@@ -114,39 +109,33 @@ export default function CalendarScreen() {
     const selectedEnd = new Date(selectedDate);
     selectedEnd.setHours(23, 59, 59, 999);
 
-    const dEvents = allEvents.filter(e => {
-      const ts = e.timestamp instanceof Object && 'toMillis' in e.timestamp ? e.timestamp.toMillis() : new Date(e.timestamp).getTime();
+    const dRecords = allRecords.filter(r => {
+      const ts = getRecordTimestamp(r);
       return ts >= selectedStart.getTime() && ts <= selectedEnd.getTime();
     });
 
-    return { monthEvents: mEvents, selectedDayEvents: dEvents };
-  }, [allEvents, monthRange, selectedDate]);
+    return { monthRecords: mRecords, selectedDayRecords: dRecords };
+  }, [allRecords, monthRange, selectedDate]);
 
   // Calculate Adherence Data for dots
   const adherenceData = useMemo(() => {
     const data: Record<string, { status: 'complete' | 'partial' | 'missed' | 'none' }> = {};
     
-    // Group events by day
-    const eventsByDay: Record<string, MedicationEvent[]> = {};
-    monthEvents.forEach(e => {
-      const ts = e.timestamp instanceof Object && 'toMillis' in e.timestamp ? e.timestamp.toMillis() : e.timestamp
+    // Group records by day
+    const recordsByDay: Record<string, IntakeRecord[]> = {};
+    monthRecords.forEach(r => {
+      const ts = getRecordTimestamp(r);
       const dateStr = format(new Date(ts), 'yyyy-MM-dd');
-      if (!eventsByDay[dateStr]) eventsByDay[dateStr] = [];
-      eventsByDay[dateStr].push(e);
+      if (!recordsByDay[dateStr]) recordsByDay[dateStr] = [];
+      recordsByDay[dateStr].push(r);
     });
 
-    // Determine status for each day (Simplified logic)
-    // "complete": All scheduled taken (requires medication schedule, which we don't have easily here without fetching all meds)
-    // For now, let's use a heuristic based on event types:
-    // If any 'missed' event -> 'missed' or 'partial'
-    // If only 'taken' -> 'complete'
-    // If 'skipped' -> 'partial'
-    
-    Object.keys(eventsByDay).forEach(dateStr => {
-      const dayEvents = eventsByDay[dateStr];
-      const hasMissed = dayEvents.some(e => e.status === 'missed');
-      const hasSkipped = dayEvents.some(e => e.status === 'skipped');
-      const hasTaken = dayEvents.some(e => e.status === 'taken');
+    // Determine status for each day based on IntakeStatus
+    Object.keys(recordsByDay).forEach(dateStr => {
+      const dayRecords = recordsByDay[dateStr];
+      const hasMissed = dayRecords.some(r => r.status === IntakeStatus.MISSED);
+      const hasSkipped = dayRecords.some(r => r.status === IntakeStatus.SKIPPED);
+      const hasTaken = dayRecords.some(r => r.status === IntakeStatus.TAKEN);
 
       let status: 'complete' | 'partial' | 'missed' | 'none' = 'none';
       
@@ -158,7 +147,7 @@ export default function CalendarScreen() {
     });
 
     return data;
-  }, [monthEvents]);
+  }, [monthRecords]);
 
   // Calculate Selected Day Stats
   const selectedDayStats = useMemo(() => {
@@ -166,19 +155,19 @@ export default function CalendarScreen() {
     let missed = 0;
     let skipped = 0;
 
-    selectedDayEvents.forEach(e => {
-      if (e.status === 'taken') taken++;
-      if (e.status === 'missed') missed++;
-      if (e.status === 'skipped') skipped++;
+    selectedDayRecords.forEach(r => {
+      if (r.status === IntakeStatus.TAKEN) taken++;
+      if (r.status === IntakeStatus.MISSED) missed++;
+      if (r.status === IntakeStatus.SKIPPED) skipped++;
     });
 
     return {
       taken,
       missed,
       skipped,
-      total: taken + missed + skipped // Only counts recorded events
+      total: taken + missed + skipped
     };
-  }, [selectedDayEvents]);
+  }, [selectedDayRecords]);
 
   // Calculate Weekly Stats for AdherenceChart
   const weeklyStats = useMemo(() => {
@@ -193,13 +182,13 @@ export default function CalendarScreen() {
       const dayStart = day.getTime();
       const dayEnd = new Date(day).setHours(23, 59, 59, 999);
 
-      const dayEvents = allEvents.filter(e => {
-        const ts = e.timestamp instanceof Object && 'toMillis' in e.timestamp ? e.timestamp.toMillis() : new Date(e.timestamp).getTime();
+      const dayRecords = allRecords.filter(r => {
+        const ts = getRecordTimestamp(r);
         return ts >= dayStart && ts <= dayEnd;
       });
 
-      const taken = dayEvents.filter(e => e.status === 'taken').length;
-      const total = dayEvents.length;
+      const taken = dayRecords.filter(r => r.status === IntakeStatus.TAKEN).length;
+      const total = dayRecords.length;
       
       const isFuture = day > now;
       
@@ -226,7 +215,7 @@ export default function CalendarScreen() {
         dateStr
       };
     });
-  }, [selectedDate, allEvents]);
+  }, [selectedDate, allRecords]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -234,15 +223,15 @@ export default function CalendarScreen() {
     setRefreshing(false);
   }, [mutate]);
 
-  const handleEventPress = (event: MedicationEvent) => {
+  const handleRecordPress = (record: IntakeRecord) => {
     // Navigate to medication detail if patientId and medicationId are present
-    if (event.patientId && event.medicationId) {
+    if (record.patientId && record.medicationId) {
       router.push({
         pathname: '/caregiver/medications/[patientId]/[id]',
-        params: { patientId: event.patientId, id: event.medicationId }
+        params: { patientId: record.patientId, id: record.medicationId }
       });
     } else {
-      console.warn('Event missing patientId or medicationId', event);
+      console.warn('Record missing patientId or medicationId', record);
     }
   };
 
@@ -284,17 +273,17 @@ export default function CalendarScreen() {
           <View style={styles.chartContainer}>
             <AdherenceChart 
               weeklyStats={weeklyStats} 
-              loading={eventsLoading && !allEvents.length} 
+              loading={eventsLoading && !allRecords.length} 
             />
           </View>
 
           <View style={styles.detailContainer}>
             <DayDetail
               date={selectedDate}
-              events={selectedDayEvents}
+              records={selectedDayRecords}
               stats={selectedDayStats}
-              loading={eventsLoading && !allEvents.length}
-              onEventPress={handleEventPress}
+              loading={eventsLoading && !allRecords.length}
+              onRecordPress={handleRecordPress}
             />
           </View>
         </ScrollView>

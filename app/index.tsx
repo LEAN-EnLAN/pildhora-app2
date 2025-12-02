@@ -24,7 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../src/theme/tokens';
 import { AppIcon, Button } from '../src/components/ui';
-import { TestTopoButton } from '../src/components/shared';
+import { TestTopoButton, DeveloperToolsSection } from '../src/components/shared';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -124,8 +124,6 @@ const LandingView = memo(({ onStart, onLogin }: { onStart: () => void; onLogin: 
       </View>
 
       <View style={styles.actionSection}>
-        <TestTopoButton />
-
         <TouchableOpacity
           onPress={onStart}
           activeOpacity={0.9}
@@ -155,6 +153,11 @@ const LandingView = memo(({ onStart, onLogin }: { onStart: () => void; onLogin: 
             ¿Ya tienes cuenta? <Text style={styles.loginTextBold}>Inicia sesión</Text>
           </Text>
         </TouchableOpacity>
+
+        {/* Developer Tools - Hidden by default, tap 5 times to reveal */}
+        <DeveloperToolsSection>
+          <TestTopoButton />
+        </DeveloperToolsSection>
       </View>
     </View>
   );

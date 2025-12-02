@@ -25,6 +25,15 @@ const DAYS_OF_WEEK = [
   { label: 'Dom', value: 'Sun', fullName: 'Domingo' },
 ];
 
+const DAILY_FREQUENCY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const QUICK_ACTIONS = [
+  { label: 'Cada turno mañana', time: '08:00' },
+  { label: 'Cada turno mediodía', time: '12:00' },
+  { label: 'Cada turno tarde', time: '16:00' },
+  { label: 'Cada turno noche', time: '22:00' },
+];
+
 interface CustomTimelineProps {
   times: string[];
   emoji?: string;
@@ -109,7 +118,7 @@ export function MedicationScheduleStep() {
       updateFormData({
         times: ['08:00'],
         frequency: (!formData.frequency || formData.frequency.length === 0)
-          ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+          ? DAILY_FREQUENCY
           : formData.frequency,
       });
     }
@@ -209,6 +218,13 @@ export function MedicationScheduleStep() {
     }
   };
 
+  const handleQuickAction = (time: string) => {
+    updateFormData({
+      times: [time],
+      frequency: DAILY_FREQUENCY,
+    });
+  };
+
   const handleToggleDay = (dayValue: string) => {
     const currentDays = [...(formData.frequency || [])];
     const index = currentDays.indexOf(dayValue);
@@ -234,6 +250,24 @@ export function MedicationScheduleStep() {
           <Text style={styles.subtitle}>
             Configura cuándo debe tomarse este medicamento
           </Text>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Acciones rápidas</Text>
+          <View style={styles.quickActionsRow}>
+            {QUICK_ACTIONS.map((action) => (
+              <TouchableOpacity
+                key={action.label}
+                style={styles.quickActionChip}
+                onPress={() => handleQuickAction(action.time)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.quickActionLabel}>{action.label}</Text>
+                <Text style={styles.quickActionTime}>{action.time}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         {/* Times Section */}
@@ -405,6 +439,32 @@ const styles = StyleSheet.create({
   },
   timesList: {
     gap: spacing.sm,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  quickActionChip: {
+    flexBasis: '48%',
+    backgroundColor: colors.primary[50],
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary[100],
+    ...shadows.sm,
+  },
+  quickActionLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+    marginBottom: spacing.xs / 2,
+  },
+  quickActionTime: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray[900],
   },
   timeRow: {
     flexDirection: 'row',

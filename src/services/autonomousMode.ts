@@ -1,5 +1,5 @@
 import { getDbInstance, getAuthInstance } from './firebase';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 /**
  * Service for managing patient autonomous mode
@@ -34,7 +34,6 @@ export async function setAutonomousMode(
 
   try {
     const auth = await getAuthInstance();
-    const db = await getDbInstance();
 
     if (!auth || !auth.currentUser) {
       throw new AutonomousModeError(
@@ -52,22 +51,22 @@ export async function setAutonomousMode(
       );
     }
 
-    if (!db) {
-      throw new AutonomousModeError(
-        'Database not initialized',
-        'DB_NOT_INITIALIZED',
-        'Error de conexión. Por favor, reinicia la aplicación.'
-      );
+    // Refresh token to avoid stale ID token issues with callables
+    try {
+      await auth.currentUser.getIdToken(true);
+    } catch (e: any) {
+      console.warn('[AutonomousMode] Failed to refresh ID token', { code: e?.code, message: e?.message });
     }
 
-    // Update user document with autonomous mode setting
-    const userRef = doc(db, 'users', patientId);
+    const db = await getDbInstance();
+    if (!db) {
+      throw new AutonomousModeError('Firestore not initialized', 'FIRESTORE_NOT_INITIALIZED', 'Error de conexión.');
+    }
     await setDoc(
-      userRef,
+      doc(db, 'users', patientId),
       {
         autonomousMode: enabled,
         autonomousModeChangedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       },
       { merge: true }
     );
@@ -75,7 +74,7 @@ export async function setAutonomousMode(
     console.log('[AutonomousMode] Successfully updated autonomous mode');
   } catch (error: any) {
     console.error('[AutonomousMode] Error setting autonomous mode:', error);
-    
+
     if (error instanceof AutonomousModeError) {
       throw error;
     }
@@ -95,6 +94,16 @@ export async function setAutonomousMode(
  */
 export async function isAutonomousModeEnabled(patientId: string): Promise<boolean> {
   try {
+    // Best effort to ensure we have a fresh token; ignore failures
+    const auth = await getAuthInstance();
+    if (auth?.currentUser) {
+      try {
+        await auth.currentUser.getIdToken(true);
+      } catch (e: any) {
+        console.warn('[AutonomousMode] Failed to refresh ID token for read', { code: e?.code, message: e?.message });
+      }
+    }
+
     const db = await getDbInstance();
 
     if (!db) {

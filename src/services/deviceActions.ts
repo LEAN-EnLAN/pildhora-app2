@@ -1,6 +1,6 @@
-import { getRdbInstance } from './firebase';
-import { ref, set, get } from 'firebase/database';
-import { triggerTopo, triggerBuzzer } from './deviceCommands';
+import { getDeviceRdbInstance } from './firebase';
+import { ref, get, push, set } from 'firebase/database';
+import { triggerTopo, triggerBuzzer, clearDeviceCommands } from './deviceCommands';
 
 /**
  * Device action types that can be triggered by caregivers
@@ -37,8 +37,7 @@ interface DeviceActionRequest {
  * Service for triggering device actions from the caregiver app
  * 
  * This service allows caregivers to send commands to patient devices
- * through Firebase Realtime Database. The device firmware monitors
- * the actions node and executes commands.
+ * through Cloud Functions.
  * 
  * Requirements: 8.4 - Enable device action triggers for caregivers
  */
@@ -77,45 +76,21 @@ export class DeviceActionsService {
   async dispenseManualDose(deviceId: string, userId: string): Promise<DeviceActionResult> {
     try {
       console.log('[DeviceActionsService] Creating dispense request:', { deviceId, userId });
-
-      const rdb = await getRdbInstance();
-      if (!rdb) {
-        return { success: false, message: 'RTDB no disponible' };
-      }
-
-      // Gatekeeper: verify device state
-      const stateSnap = await get(ref(rdb, `devices/${deviceId}/state`));
-      if (!stateSnap.exists()) {
-        return { success: false, message: 'Estado de dispositivo no encontrado' };
-      }
-      const st = stateSnap.val() || {};
-      const current = (st.current_status || '').toString().toLowerCase();
-      const timeSynced = !!st.time_synced;
-      const isIdle = current === 'idle' || current === 'ready' || current === '';
-      if (!st.is_online) {
-        return { success: false, message: 'Dispositivo desconectado' };
-      }
-      if (!timeSynced) {
-        return { success: false, message: 'Sincroniza la hora del dispositivo antes de dispensar' };
-      }
-      if (!isIdle) {
-        return { success: false, message: 'El dispositivo no está listo para dispensar' };
-      }
-
-      const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const req = {
+      const rdb = await getDeviceRdbInstance();
+      if (!rdb) return { success: false, message: 'RTDB no disponible' };
+      const listRef = ref(rdb, `devices/${deviceId}/actions`);
+      const newRef = push(listRef);
+      const actionId = newRef.key as string;
+      await set(newRef, {
+        actionType: 'dispense_dose',
         requestedBy: userId,
         requestedAt: Date.now(),
-        dose: 1,
         status: 'pending',
-      } as any;
-
-      await set(ref(rdb, `devices/${deviceId}/dispenseRequests/${requestId}`), req);
-
-      return { success: true, message: 'Solicitud de dispensación enviada', actionId: requestId };
+      });
+      return { success: true, message: 'Solicitud de dispensación enviada', actionId };
     } catch (error: any) {
       console.error('[DeviceActionsService] Error creating dispense request:', error);
-      return { success: false, message: error.userMessage || 'Error al solicitar dispensación' };
+      return { success: false, message: error.message || 'Error al solicitar dispensación' };
     }
   }
 
@@ -180,65 +155,18 @@ export class DeviceActionsService {
   ): Promise<DeviceActionResult> {
     try {
       console.log('[DeviceActionsService] Triggering action:', { deviceId, actionType, userId });
-
-      // Validate inputs
-      if (!deviceId || !userId) {
-        return {
-          success: false,
-          message: 'Device ID and User ID are required',
-        };
-      }
-
-      // Get RTDB instance
-      const rdb = await getRdbInstance();
-      if (!rdb) {
-        return {
-          success: false,
-          message: 'Firebase Realtime Database not available',
-        };
-      }
-
-      // Check if device is online
-      const deviceStateRef = ref(rdb, `devices/${deviceId}/state`);
-      const deviceStateSnapshot = await get(deviceStateRef);
-      
-      if (!deviceStateSnapshot.exists()) {
-        return {
-          success: false,
-          message: 'Device not found',
-        };
-      }
-
-      const deviceState = deviceStateSnapshot.val();
-      if (!deviceState.is_online) {
-        return {
-          success: false,
-          message: 'Device is offline. Please ensure the device is connected.',
-        };
-      }
-
-      // Generate action ID
-      const actionId = `action_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-
-      // Create action request
-      const actionRequest: DeviceActionRequest = {
+      const rdb = await getDeviceRdbInstance();
+      if (!rdb) return { success: false, message: 'RTDB no disponible' };
+      const listRef = ref(rdb, `devices/${deviceId}/actions`);
+      const newRef = push(listRef);
+      const actionId = newRef.key as string;
+      await set(newRef, {
         actionType,
         requestedBy: userId,
         requestedAt: Date.now(),
         status: 'pending',
-      };
-
-      // Write action to RTDB
-      const actionRef = ref(rdb, `devices/${deviceId}/actions/${actionId}`);
-      await set(actionRef, actionRequest);
-
-      console.log('[DeviceActionsService] Action triggered successfully:', actionId);
-
-      return {
-        success: true,
-        message: this.getSuccessMessage(actionType),
-        actionId,
-      };
+      });
+      return { success: true, message: this.getSuccessMessage(actionType), actionId };
     } catch (error: any) {
       console.error('[DeviceActionsService] Error triggering action:', error);
       return {
@@ -277,7 +205,7 @@ export class DeviceActionsService {
    */
   async getActionStatus(deviceId: string, actionId: string): Promise<DeviceActionRequest | null> {
     try {
-      const rdb = await getRdbInstance();
+      const rdb = await getDeviceRdbInstance();
       if (!rdb) {
         return null;
       }

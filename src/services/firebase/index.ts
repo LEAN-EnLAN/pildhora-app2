@@ -35,12 +35,29 @@ const firebaseConfig: any = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Handle Database URL
-const envDatabaseURL = process.env.EXPO_PUBLIC_FIREBASE_DATABASE_URL;
-if (envDatabaseURL) {
-  firebaseConfig.databaseURL = envDatabaseURL;
-} else if (firebaseConfig.projectId) {
-  firebaseConfig.databaseURL = `https://${firebaseConfig.projectId}-default-rtdb.firebaseio.com`;
+// Default RTDB (app data) and devices RTDB (hardware commands) use different URLs.
+const envDefaultDbUrl = process.env.EXPO_PUBLIC_FIREBASE_DATABASE_URL;
+const envDeviceDbUrl = process.env.EXPO_PUBLIC_FIREBASE_DEVICE_DATABASE_URL;
+
+// If someone pointed EXPO_PUBLIC_FIREBASE_DATABASE_URL to the devices DB by mistake, prefer the project default.
+const inferredDefaultDbUrl = firebaseConfig.projectId
+  ? `https://${firebaseConfig.projectId}-default-rtdb.firebaseio.com`
+  : undefined;
+
+const defaultDbUrl =
+  envDefaultDbUrl && envDefaultDbUrl.includes('default-rtdb')
+    ? envDefaultDbUrl
+    : inferredDefaultDbUrl;
+
+const deviceDbUrl =
+  envDeviceDbUrl ||
+  (envDefaultDbUrl && envDefaultDbUrl.includes('devices-') ? envDefaultDbUrl : null) ||
+  'https://devices-m1947.firebaseio.com';
+
+if (envDefaultDbUrl && envDefaultDbUrl.includes('devices-')) {
+  console.warn(
+    '[Firebase] EXPO_PUBLIC_FIREBASE_DATABASE_URL points to a devices DB; using project default for app data instead.'
+  );
 }
 
 // Initialize App
@@ -81,7 +98,9 @@ if (Platform.OS === 'web') {
 
 // Initialize Services
 const db = getFirestore(app);
-const rdb = getDatabase(app);
+// Explicitly pass URLs so default app data doesn't accidentally use the devices DB.
+const rdb = getDatabase(app, defaultDbUrl);
+const deviceRdb = getDatabase(app, deviceDbUrl);
 const functions = getFunctions(app);
 
 // Connect to Emulators if configured
@@ -98,6 +117,7 @@ const connectToEmulators = () => {
       const dbHost = process.env.EXPO_PUBLIC_DATABASE_EMULATOR_HOST || 'localhost';
       const dbPort = Number(process.env.EXPO_PUBLIC_DATABASE_EMULATOR_PORT || 9000);
       connectDatabaseEmulator(rdb, dbHost, dbPort);
+      connectDatabaseEmulator(deviceRdb, dbHost, dbPort);
       
       const functionsHost = process.env.EXPO_PUBLIC_FUNCTIONS_EMULATOR_HOST || 'localhost';
       const functionsPort = Number(process.env.EXPO_PUBLIC_FUNCTIONS_EMULATOR_PORT || 5001);
@@ -113,13 +133,14 @@ const connectToEmulators = () => {
 connectToEmulators();
 
 // Export instances directly
-export { app, auth, db, rdb, functions };
+export { app, auth, db, rdb, deviceRdb, functions };
 
 // Export async getters for backward compatibility
 // These are now just wrappers that return the already initialized instances
 export const getAuthInstance = async () => auth;
 export const getDbInstance = async () => db;
 export const getRdbInstance = async () => rdb;
+export const getDeviceRdbInstance = async () => deviceRdb;
 export const getFunctionsInstance = async () => functions;
 
 // Helper to check initialization status (always true now)

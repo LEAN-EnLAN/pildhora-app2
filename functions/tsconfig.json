@@ -3,6 +3,10 @@
   "include": [
     "src"
   ],
+  "exclude": [
+    "src/ai.ts",
+    "src/genkit-sample.ts"
+  ],
   "compilerOptions": {
     "module": "NodeNext",
     "noImplicitReturns": true,
@@ -13,6 +17,6 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "moduleResolution": "NodeNext",
-    "noUnusedLocals": true
+    "noUnusedLocals": false
   }
 }

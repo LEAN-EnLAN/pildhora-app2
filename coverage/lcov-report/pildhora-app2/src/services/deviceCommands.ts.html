@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/44</span>
+                <span class='fraction'>0/46</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/41</span>
+                <span class='fraction'>0/43</span>
             </div>
         
             
@@ -240,10 +240,7 @@
 <a name='L175'></a><a href='#L175'>175</a>
 <a name='L176'></a><a href='#L176'>176</a>
 <a name='L177'></a><a href='#L177'>177</a>
-<a name='L178'></a><a href='#L178'>178</a>
-<a name='L179'></a><a href='#L179'>179</a>
-<a name='L180'></a><a href='#L180'>180</a>
-<a name='L181'></a><a href='#L181'>181</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L178'></a><a href='#L178'>178</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -300,22 +297,18 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -417,6 +410,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -437,8 +431,8 @@
  * - reboot: Reboot device
  */
 &nbsp;
-import { getRdbInstance, getAuthInstance } from './firebase';
-import { ref, get, update } from 'firebase/database';
+import { getDeviceRdbInstance, getAuthInstance } from './firebase';
+import { ref, get, update, set } from 'firebase/database';
 &nbsp;
 export interface DeviceCommand {
   topo?: boolean;
@@ -471,9 +465,8 @@ async function <span class="fstat-no" title="function not covered" >validateAuth
 <span class="cstat-no" title="statement not covered" >  return auth.currentUser.uid;</span>
 }
 &nbsp;
-&nbsp;
 /**
- * Send a command to a device via Firebase RTDB
+ * Send a command to a device via Cloud Functions
  * @param deviceId - The device ID
  * @param command - The command to send
  */
@@ -485,19 +478,16 @@ export async function <span class="fstat-no" title="function not covered" >sendD
   
 <span class="cstat-no" title="statement not covered" >  try {</span>
 <span class="cstat-no" title="statement not covered" >    await validateAuth();</span>
-    
-    const rdb = <span class="cstat-no" title="statement not covered" >await getRdbInstance();</span>
+    const rdb = <span class="cstat-no" title="statement not covered" >await getDeviceRdbInstance();</span>
 <span class="cstat-no" title="statement not covered" >    if (!rdb) {</span>
-<span class="cstat-no" title="statement not covered" >      throw new DeviceCommandError(</span>
-        'RTDB not initialized',
-        'RTDB_NOT_INITIALIZED',
-        'Error de conexión. Reinicia la aplicación.'
-      );
+<span class="cstat-no" title="statement not covered" >      throw new DeviceCommandError('RTDB not initialized', 'RTDB_NOT_INITIALIZED', 'Error de conexión.');</span>
     }
-    
     const commandsRef = <span class="cstat-no" title="statement not covered" >ref(rdb, `devices/${deviceId}/commands`);</span>
-<span class="cstat-no" title="statement not covered" >    await update(commandsRef, command);</span>
-    
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      await update(commandsRef, command as any);</span>
+    } catch {
+<span class="cstat-no" title="statement not covered" >      await set(commandsRef, command as any);</span>
+    }
 <span class="cstat-no" title="statement not covered" >    console.log('[DeviceCommands] Command sent successfully');</span>
   } catch (error: any) {
 <span class="cstat-no" title="statement not covered" >    console.error('[DeviceCommands] Error sending command:', error);</span>
@@ -576,7 +566,7 @@ export async function <span class="fstat-no" title="function not covered" >getDe
 <span class="cstat-no" title="statement not covered" >  try {</span>
 <span class="cstat-no" title="statement not covered" >    await validateAuth();</span>
     
-    const rdb = <span class="cstat-no" title="statement not covered" >await getRdbInstance();</span>
+    const rdb = <span class="cstat-no" title="statement not covered" >await getDeviceRdbInstance();</span>
 <span class="cstat-no" title="statement not covered" >    if (!rdb) <span class="cstat-no" title="statement not covered" >return null;</span></span>
     
     const commandsRef = <span class="cstat-no" title="statement not covered" >ref(rdb, `devices/${deviceId}/commands`);</span>
@@ -600,6 +590,7 @@ export async function <span class="fstat-no" title="function not covered" >clear
     topo: false,
     buzzer: false,
     led: false,
+    ledColor: undefined,
     reboot: false
   });
 }
@@ -610,7 +601,7 @@ export async function <span class="fstat-no" title="function not covered" >clear
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-27T05:07:49.888Z
+                at 2025-12-02T06:06:36.767Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

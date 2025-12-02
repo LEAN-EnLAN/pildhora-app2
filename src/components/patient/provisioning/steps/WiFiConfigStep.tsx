@@ -5,7 +5,7 @@ import { Button } from '../../../ui';
 import { colors, spacing, typography, borderRadius, shadows } from '../../../../theme/tokens';
 import { useWizardContext } from '../WizardContext';
 import { announceForAccessibility, triggerHapticFeedback, HapticFeedbackType } from '../../../../utils/accessibility';
-import { getRdbInstance } from '../../../../services/firebase';
+import { getRdbInstance, getDeviceRdbInstance } from '../../../../services/firebase';
 import { ref, set, get } from 'firebase/database';
 
 /**
@@ -33,7 +33,7 @@ export function WiFiConfigStep() {
   }, [configSaved, setCanProceed]);
 
   const sendCommandFlag = async (key: string, value: any) => {
-    const rdb = await getRdbInstance();
+    const rdb = await getDeviceRdbInstance();
     if (!rdb) throw new Error('Error de conexión a la base de datos');
     const cmdRef = ref(rdb, `devices/${formData.deviceId}/commands/${key}`);
     await set(cmdRef, value);
@@ -48,7 +48,7 @@ export function WiFiConfigStep() {
     setSaveError(null);
 
     try {
-      const rdb = await getRdbInstance();
+      const rdb = await getDeviceRdbInstance();
       if (!rdb) throw new Error('Error de conexión a la base de datos');
       const deviceStateRef = ref(rdb, `devices/${formData.deviceId}/state`);
       await new Promise(resolve => setTimeout(resolve, 1500));

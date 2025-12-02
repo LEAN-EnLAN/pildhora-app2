@@ -13,7 +13,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../../src/store/slices/authSlice';
 import { getAuth } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { RootState } from '../../src/store';
+import { RootState, AppDispatch } from '../../src/store';
 import { useLinkedPatients } from '../../src/hooks/useLinkedPatients';
 import { useNetworkStatus } from '../../src/hooks/useNetworkStatus';
 import { useScrollViewPadding } from '../../src/hooks/useScrollViewPadding';
@@ -26,7 +26,7 @@ import { ScreenWrapper, CaregiverHeader } from '../../src/components/caregiver';
 import { AutonomousModeBanner } from '../../src/components/caregiver/AutonomousModeBanner';
 import { usePatientAutonomousMode } from '../../src/hooks/usePatientAutonomousMode';
 import { ErrorBoundary } from '../../src/components/shared/ErrorBoundary';
-import { TestTopoButton } from '../../src/components/shared';
+import { TestTopoButton, TestScheduleSyncButton, DeveloperToolsSection } from '../../src/components/shared';
 import { ErrorState } from '../../src/components/caregiver/ErrorState';
 import { OfflineIndicator } from '../../src/components/caregiver/OfflineIndicator';
 import { patientDataCache } from '../../src/services/patientDataCache';
@@ -34,6 +34,7 @@ import { categorizeError } from '../../src/utils/errorHandling';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import { useDeviceState } from '../../src/hooks/useDeviceState';
+import { CriticalEventNotificationsService } from '../../src/services/criticalEventNotifications';
 
 // Components
 import { StatusRibbon } from '../../src/components/caregiver/dashboard/StatusRibbon';
@@ -43,7 +44,7 @@ const SELECTED_PATIENT_KEY = '@caregiver_selected_patient';
 
 function CaregiverDashboardContent() {
   const router = useRouter();
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const { user } = useSelector((state: RootState) => state.auth);
   
   // Layout dimensions
@@ -226,6 +227,42 @@ function CaregiverDashboardContent() {
     enabled: !!selectedPatient?.deviceId && isOnline,
   });
 
+  // 2. Critical Events Monitoring (Topo notifications)
+  const [topoNotification, setTopoNotification] = useState<{
+    type: string;
+    patientName: string;
+    medicationName?: string;
+    timestamp: Date;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!caregiverUid || !isInitialized) return;
+
+    const criticalEventsService = new CriticalEventNotificationsService();
+    
+    // Start monitoring for critical events
+    criticalEventsService.startMonitoring(caregiverUid, (event) => {
+      // Handle topo-related events
+      if (event.eventType.startsWith('topo_')) {
+        setTopoNotification({
+          type: event.eventType,
+          patientName: event.patientName,
+          medicationName: event.medicationName,
+          timestamp: new Date(),
+        });
+
+        // Auto-dismiss after 10 seconds
+        setTimeout(() => {
+          setTopoNotification(null);
+        }, 10000);
+      }
+    });
+
+    return () => {
+      criticalEventsService.stopMonitoring(caregiverUid);
+    };
+  }, [caregiverUid, isInitialized]);
+
   // Navigation
   const handleNavigate = useCallback((screen: 'calendar' | 'medications' | 'tasks' | 'add-device') => {
     router.push(`/caregiver/${screen}`);
@@ -281,6 +318,44 @@ function CaregiverDashboardContent() {
   return (
     <ScreenWrapper applyTopPadding={false}>
       <OfflineIndicator />
+      
+      {/* Topo Notification Banner */}
+      {topoNotification && (
+        <Animated.View style={styles.topoNotificationBanner}>
+          <View style={[
+            styles.topoNotificationContent,
+            topoNotification.type === 'topo_taken' && styles.topoNotificationSuccess,
+            topoNotification.type === 'topo_missed' && styles.topoNotificationWarning,
+            topoNotification.type === 'topo_timeout' && styles.topoNotificationError,
+          ]}>
+            <Ionicons 
+              name={
+                topoNotification.type === 'topo_started' ? 'notifications' :
+                topoNotification.type === 'topo_taken' ? 'checkmark-circle' :
+                topoNotification.type === 'topo_missed' ? 'close-circle' :
+                'alert-circle'
+              } 
+              size={24} 
+              color="white" 
+            />
+            <View style={styles.topoNotificationText}>
+              <Text style={styles.topoNotificationTitle}>
+                {topoNotification.type === 'topo_started' && '⏰ Hora de medicación'}
+                {topoNotification.type === 'topo_taken' && '✅ Medicación tomada'}
+                {topoNotification.type === 'topo_missed' && '⚠️ Medicación omitida'}
+                {topoNotification.type === 'topo_timeout' && '🚨 Sin respuesta'}
+              </Text>
+              <Text style={styles.topoNotificationMessage}>
+                {topoNotification.patientName}
+                {topoNotification.medicationName && ` - ${topoNotification.medicationName}`}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setTopoNotification(null)}>
+              <Ionicons name="close" size={20} color="rgba(255,255,255,0.8)" />
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      )}
       
       {/* Custom Header with Patient Selector */}
       <View style={{ zIndex: 1000 }}>
@@ -382,17 +457,23 @@ function CaregiverDashboardContent() {
 
               {/* Device Actions */}
               <View style={styles.deviceActions}>
-                <TestTopoButton deviceId={selectedPatient?.deviceId || 'TEST-DEVICE-001'} />
-                
                 <Button 
                   variant="outline"
                   onPress={() => handleNavigate('add-device')}
-                  style={{ marginTop: spacing.md }}
                   leftIcon={<Ionicons name="settings-outline" size={18} color={colors.primary[600]} />}
                 >
                   Configurar Dispositivo
                 </Button>
               </View>
+
+              {/* Developer Tools - Hidden by default in production */}
+              <DeveloperToolsSection>
+                <TestTopoButton deviceId={selectedPatient?.deviceId || 'TEST-DEVICE-001'} />
+                <TestScheduleSyncButton 
+                  deviceId={selectedPatient?.deviceId} 
+                  patientId={selectedPatient?.id}
+                />
+              </DeveloperToolsSection>
 
             </Animated.View>
           )}
@@ -584,5 +665,48 @@ const styles = StyleSheet.create({
   statusRibbonContainer: {
     paddingHorizontal: spacing.md,
     marginTop: spacing.md,
+  },
+  // Topo notification styles
+  topoNotificationBanner: {
+    position: 'absolute',
+    top: 100,
+    left: spacing.md,
+    right: spacing.md,
+    zIndex: 2000,
+  },
+  topoNotificationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[600],
+    padding: spacing.md,
+    borderRadius: 12,
+    gap: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  topoNotificationSuccess: {
+    backgroundColor: colors.success[600],
+  },
+  topoNotificationWarning: {
+    backgroundColor: colors.warning[500],
+  },
+  topoNotificationError: {
+    backgroundColor: colors.error[600],
+  },
+  topoNotificationText: {
+    flex: 1,
+  },
+  topoNotificationTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: 'white',
+  },
+  topoNotificationMessage: {
+    fontSize: typography.fontSize.sm,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 2,
   },
 });

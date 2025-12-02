@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/10</span>
+                <span class='fraction'>0/19</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/10</span>
+                <span class='fraction'>0/16</span>
             </div>
         
             
@@ -141,18 +141,12 @@
 <a name='L76'></a><a href='#L76'>76</a>
 <a name='L77'></a><a href='#L77'>77</a>
 <a name='L78'></a><a href='#L78'>78</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -163,6 +157,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -218,28 +218,28 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// Import the Genkit core libraries and plugins.
-import {genkit, z} from "genkit";
-import {vertexAI} from "@genkit-ai/vertexai";
+<span class="cstat-no" title="statement not covered" >import {genkit, z} from "genkit";</span>
+<span class="cstat-no" title="statement not covered" >import {vertexAI} from "@genkit-ai/vertexai";</span>
 &nbsp;
 // Import models from the Vertex AI plugin. The Vertex AI API provides access to
 // several generative models. Here, we import Gemini 2.0 Flash.
-import {gemini20Flash} from "@genkit-ai/vertexai";
+<span class="cstat-no" title="statement not covered" >import {gemini20Flash} from "@genkit-ai/vertexai";</span>
 &nbsp;
 // Cloud Functions for Firebase supports Genkit natively. The onCallGenkit function creates a callable
 // function from a Genkit action. It automatically implements streaming if your flow does.
 // The https library also has other utility methods such as hasClaim, which verifies that
 // a caller's token has a specific claim (optionally matching a specific value)
-import { onCallGenkit, hasClaim } from "firebase-functions/https";
+<span class="cstat-no" title="statement not covered" >import { onCallGenkit, hasClaim } from "firebase-functions/https"</span>;
 &nbsp;
 // Genkit models generally depend on an API key. APIs should be stored in Cloud Secret Manager so that
 // access to these sensitive values can be controlled. defineSecret does this for you automatically.
 // If you are using Google generative AI you can get an API key at https://aistudio.google.com/app/apikey
-import { defineSecret } from "firebase-functions/params";
+<span class="cstat-no" title="statement not covered" >import { defineSecret } from "firebase-functions/params"</span>;
 const apiKey = <span class="cstat-no" title="statement not covered" >defineSecret("GOOGLE_GENAI_API_KEY");</span>
 &nbsp;
 // The Firebase telemetry plugin exports a combination of metrics, traces, and logs to Google Cloud
 // Observability. See https://firebase.google.com/docs/genkit/observability/telemetry-collection.
-import {enableFirebaseTelemetry} from "@genkit-ai/firebase";
+<span class="cstat-no" title="statement not covered" >import {enableFirebaseTelemetry} from "@genkit-ai/firebase";</span>
 <span class="cstat-no" title="statement not covered" >enableFirebaseTelemetry();</span>
 &nbsp;
 const ai = <span class="cstat-no" title="statement not covered" >genkit({</span>
@@ -257,11 +257,11 @@ const menuSuggestionFlow = <span class="cstat-no" title="statement not covered" 
     inputSchema: z.string().describe("A restaurant theme").default("seafood"),
     outputSchema: z.string(),
     streamSchema: z.string(),
-  }, <span class="fstat-no" title="function not covered" >as</span>ync (subject, { sendChunk }) =&gt; {
+  }<span class="fstat-no" title="function not covered" >, asyn</span>c (subject, { sendChunk }) =&gt; {
     // Construct a request and send it to the model API.
     const prompt =
 <span class="cstat-no" title="statement not covered" >      `Suggest an item for the menu of a ${subject} themed restaurant`;</span>
-    const { response, stream } = <span class="cstat-no" title="statement not covered" >ai.generateStream({</span>
+    const { response, stream <span class="cstat-no" title="statement not covered" >} = ai.generateStream({</span>
       model: gemini20Flash,
       prompt: prompt,
       config: {
@@ -269,19 +269,19 @@ const menuSuggestionFlow = <span class="cstat-no" title="statement not covered" 
       },
     });
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    for await (const chunk of stream) {</span>
-<span class="cstat-no" title="statement not covered" >      sendChunk(chunk.text);</span>
+<span class="cstat-no" title="statement not covered" >    for await (const chu<span class="cstat-no" title="statement not covered" >nk o<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" >f</span> strea</span>m)</span> {</span>
+<span class="cstat-no" title="statement not covered" >      sendChunk(chunk.text)</span>;
     }
 &nbsp;
     // Handle the response from the model API. In this sample, we just
     // convert it to a string, but more complicated flows might coerce the
     // response into structured output or chain the response into another
     // LLM call, etc.
-<span class="cstat-no" title="statement not covered" >    return (await response).text;</span>
+<span class="cstat-no" title="statement not covered" >    return (await response).text</span>;
   }
 );
 &nbsp;
-export const menuSuggestion = <span class="cstat-no" title="statement not covered" >onCallGenkit({</span>
+export const <span class="cstat-no" title="statement not covered" >menuSuggestion = onCallGenkit({</span>
   // Uncomment to enable AppCheck. This can reduce costs by ensuring only your Verified
   // app users can use your API. Read more at https://firebase.google.com/docs/app-check/cloud-functions
   // enforceAppCheck: true,
@@ -301,7 +301,7 @@ export const menuSuggestion = <span class="cstat-no" title="statement not covere
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-27T05:07:49.888Z
+                at 2025-12-02T06:06:36.767Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

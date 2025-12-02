@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography, borderRadius, shadows } from '../../theme/tokens';
@@ -44,9 +45,31 @@ export const Modal: React.FC<ModalProps> = ({
   fitContent = false,
 }) => {
   const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
+  // Constrain modal height at runtime to avoid layouts that exceed the viewport on slower layout passes
+  const computedHeights = React.useMemo(() => {
+    // Leave room for safe areas and header/footer paddings; fall back to 90% of screen height
+    const safeMax = Math.max(320, screenHeight - (insets.top + insets.bottom + spacing.xl * 2));
+    const maxHeight = Math.min(screenHeight * 0.9, safeMax);
+
+    // Maintain existing size ratios but convert to concrete pixel values to avoid percent rounding issues
+    const sizeRatios: Record<NonNullable<ModalProps['size']>, { min: number; max: number }> = {
+      sm: { min: 0.3, max: 0.45 },
+      md: { min: 0.4, max: 0.65 },
+      lg: { min: 0.5, max: 0.85 },
+      full: { min: 0.95, max: 0.95 },
+    };
+
+    const ratios = sizeRatios[size];
+    return {
+      minHeight: screenHeight * ratios.min,
+      maxHeight: Math.min(screenHeight * ratios.max, maxHeight),
+    };
+  }, [screenHeight, insets.top, insets.bottom, size]);
 
   useEffect(() => {
     if (visible) {
@@ -116,6 +139,7 @@ export const Modal: React.FC<ModalProps> = ({
     isCentered && styles.centeredModal,
     !isBottomSheet && !isCentered && styles[`size_${size}`],
     isCentered && styles[`centered_${size}`],
+    { maxHeight: computedHeights.maxHeight, minHeight: computedHeights.minHeight },
     contentStyle,
   ];
 
@@ -199,6 +223,8 @@ export const Modal: React.FC<ModalProps> = ({
               styles.body, 
               { paddingBottom: Math.max(spacing.lg, insets.bottom + spacing.sm) }
             ]}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={true}
             bounces={true}
             keyboardShouldPersistTaps="handled"

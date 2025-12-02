@@ -12,8 +12,8 @@
  * - reboot: Reboot device
  */
 
-import { getRdbInstance, getAuthInstance } from './firebase';
-import { ref, get, update } from 'firebase/database';
+import { getDeviceRdbInstance, getAuthInstance } from './firebase';
+import { ref, get, update, set } from 'firebase/database';
 
 export interface DeviceCommand {
   topo?: boolean;
@@ -46,9 +46,8 @@ async function validateAuth(): Promise<string> {
   return auth.currentUser.uid;
 }
 
-
 /**
- * Send a command to a device via Firebase RTDB
+ * Send a command to a device via Cloud Functions
  * @param deviceId - The device ID
  * @param command - The command to send
  */
@@ -60,19 +59,16 @@ export async function sendDeviceCommand(
   
   try {
     await validateAuth();
-    
-    const rdb = await getRdbInstance();
+    const rdb = await getDeviceRdbInstance();
     if (!rdb) {
-      throw new DeviceCommandError(
-        'RTDB not initialized',
-        'RTDB_NOT_INITIALIZED',
-        'Error de conexión. Reinicia la aplicación.'
-      );
+      throw new DeviceCommandError('RTDB not initialized', 'RTDB_NOT_INITIALIZED', 'Error de conexión.');
     }
-    
     const commandsRef = ref(rdb, `devices/${deviceId}/commands`);
-    await update(commandsRef, command);
-    
+    try {
+      await update(commandsRef, command as any);
+    } catch {
+      await set(commandsRef, command as any);
+    }
     console.log('[DeviceCommands] Command sent successfully');
   } catch (error: any) {
     console.error('[DeviceCommands] Error sending command:', error);
@@ -151,7 +147,7 @@ export async function getDeviceCommands(deviceId: string): Promise<DeviceCommand
   try {
     await validateAuth();
     
-    const rdb = await getRdbInstance();
+    const rdb = await getDeviceRdbInstance();
     if (!rdb) return null;
     
     const commandsRef = ref(rdb, `devices/${deviceId}/commands`);
@@ -175,6 +171,7 @@ export async function clearDeviceCommands(deviceId: string): Promise<void> {
     topo: false,
     buzzer: false,
     led: false,
+    ledColor: undefined,
     reboot: false
   });
 }

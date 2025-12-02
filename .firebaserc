@@ -7,6 +7,9 @@
       "database": {
         "devices": [
           "devices-m1947"
+        ],
+        "default": [
+          "pildhora-app2-default-rtdb"
         ]
       }
     }

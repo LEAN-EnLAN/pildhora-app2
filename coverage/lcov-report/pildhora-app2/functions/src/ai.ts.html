@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/59</span>
+                <span class='fraction'>0/63</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/38</span>
+                <span class='fraction'>0/62</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/51</span>
+                <span class='fraction'>0/55</span>
             </div>
         
             
@@ -198,10 +198,10 @@
 <a name='L133'></a><a href='#L133'>133</a>
 <a name='L134'></a><a href='#L134'>134</a>
 <a name='L135'></a><a href='#L135'>135</a>
-<a name='L136'></a><a href='#L136'>136</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L136'></a><a href='#L136'>136</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -333,10 +333,10 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { onCall } from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
-import { defineFlow, runFlow } from "genkit";
-import { gemini20Flash } from "@genkit-ai/vertexai";
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" >import { onCall } from "firebase-functions/v2/https";</span>
+<span class="cstat-no" title="statement not covered" >import * as admin from "firebase-admin";</span>
+<span class="cstat-no" title="statement not covered" >import { defineFlow, runFlow } from "genkit";</span>
+<span class="cstat-no" title="statement not covered" >import { gemini20Flash } from "@genkit-ai/vertexai";</span>
 &nbsp;
 type Med = {
   id: string;
@@ -347,25 +347,25 @@ type Med = {
   schedule?: string[];
 };
 &nbsp;
-const getUserRole = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >as</span>ync (uid: string) =&gt; {</span>
+const getUserRole = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >async </span>(uid: string) =&gt; {</span>
   const snap = <span class="cstat-no" title="statement not covered" >await admin.firestore().doc(`users/${uid}`).get();</span>
   const data = <span class="cstat-no" title="statement not covered" >snap.data() || {};</span>
 <span class="cstat-no" title="statement not covered" >  return (data as any).role || "patient";</span>
 };
 &nbsp;
-const getLanguagePref = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >as</span>ync (uid: string) =&gt; {</span>
+const getLanguagePref = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >async </span>(uid: string) =&gt; {</span>
   const snap = <span class="cstat-no" title="statement not covered" >await admin.firestore().doc(`users/${uid}/private/preferences`).get();</span>
   const data = <span class="cstat-no" title="statement not covered" >snap.data() || {};</span>
 <span class="cstat-no" title="statement not covered" >  return (data as any).language || "es";</span>
 };
 &nbsp;
-const listPatientMedications = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >as</span>ync (patientId: string) =&gt; {</span>
+const listPatientMedications = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >async </span>(patientId: string) =&gt; {</span>
   const medsSnap = <span class="cstat-no" title="statement not covered" >await admin</span>
     .firestore()
     .collection("medications")
     .where("patientId", "==", patientId)
     .get();
-<span class="cstat-no" title="statement not covered" >  return medsSnap.docs.map(<span class="fstat-no" title="function not covered" >(d</span>) =&gt; (<span class="cstat-no" title="statement not covered" >{ id: d.id, ...(d.data() as any) })</span>) as Med[];</span>
+<span class="cstat-no" title="statement not covered" >  return medsSnap.docs.map(<span class="fstat-no" title="function not covered" >(d</span>) =&gt; <span class="cstat-no" title="statement not covered" >({ id: d.id, ...(d.data() as any) }))</span> as Med[];</span>
 };
 &nbsp;
 const medicationAnalysisFlow = <span class="cstat-no" title="statement not covered" >defineFlow({</span>
@@ -378,7 +378,7 @@ const medicationAnalysisFlow = <span class="cstat-no" title="statement not cover
     },
   },
   outputSchema: { type: "object" },
-}, <span class="fstat-no" title="function not covered" >as</span>ync (input) =&gt; {
+}, <span class="fstat-no" title="function not covered" >async </span>(input) =&gt; {
   const prompt = <span class="cstat-no" title="statement not covered" >`You are a clinical assistant. Using the following medication list, produce JSON with keys: conflicts, optimalTiming, dosageAdjustments, interactions, citations. </span>
 Return concise evidence-based recommendations and cite credible sources (FDA labels, clinical guidelines). 
 Avoid any personally identifying information. 
@@ -403,7 +403,7 @@ const patientQAFlow = <span class="cstat-no" title="statement not covered" >defi
     },
   },
   outputSchema: { type: "object" },
-}, <span class="fstat-no" title="function not covered" >as</span>ync (input) =&gt; {
+}, <span class="fstat-no" title="function not covered" >async </span>(input) =&gt; {
   const lang = <span class="cstat-no" title="statement not covered" >input.language === "en" ? "English" : "Spanish";</span>
   const prompt = <span class="cstat-no" title="statement not covered" >`You answer medication questions for patients in ${lang} at a 6th-grade reading level. </span>
 Use the provided medication list to ensure accuracy and include a short safety disclaimer. 
@@ -417,7 +417,7 @@ Return JSON with keys: answer, citations.`;
   }
 });
 &nbsp;
-export const medicationAnalysis = <span class="cstat-no" title="statement not covered" >onCall(<span class="fstat-no" title="function not covered" >as</span>ync (request) =&gt; {</span>
+export const <span class="cstat-no" title="statement not covered" >medicationAnalysis = onCall(<span class="fstat-no" title="function not covered" >async </span>(request) =&gt; {</span>
   const uid = <span class="cstat-no" title="statement not covered" >request.auth?.uid || "";</span>
 <span class="cstat-no" title="statement not covered" >  if (!uid) <span class="cstat-no" title="statement not covered" >throw new Error("unauthenticated");</span></span>
   const role = <span class="cstat-no" title="statement not covered" >await getUserRole(uid);</span>
@@ -443,7 +443,7 @@ export const medicationAnalysis = <span class="cstat-no" title="statement not co
 <span class="cstat-no" title="statement not covered" >  return result;</span>
 });
 &nbsp;
-export const patientMedicationQA = <span class="cstat-no" title="statement not covered" >onCall(<span class="fstat-no" title="function not covered" >as</span>ync (request) =&gt; {</span>
+export const <span class="cstat-no" title="statement not covered" >patientMedicationQA = onCall(<span class="fstat-no" title="function not covered" >async </span>(request) =&gt; {</span>
   const uid = <span class="cstat-no" title="statement not covered" >request.auth?.uid || "";</span>
 <span class="cstat-no" title="statement not covered" >  if (!uid) <span class="cstat-no" title="statement not covered" >throw new Error("unauthenticated");</span></span>
 &nbsp;
@@ -475,7 +475,7 @@ export const patientMedicationQA = <span class="cstat-no" title="statement not c
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-27T05:07:49.888Z
+                at 2025-12-02T06:06:36.767Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, StyleSheet, Alert, BackHandler, ActivityIndicator, Platform, Keyboard, Dimensions } from 'react-native';
+import { View, StyleSheet, Alert, BackHandler, ActivityIndicator, Platform, Keyboard } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../../ui';
 import { WizardProgressIndicator } from './WizardProgressIndicator';
 import { ExitConfirmationDialog } from './ExitConfirmationDialog';
@@ -109,6 +110,7 @@ export function DeviceProvisioningWizard({
   const [isLoadingProgress, setIsLoadingProgress] = useState(resumeFromSaved);
   const hasUnsavedChanges = useRef(false);
   const lastSavedStep = useRef<number>(0);
+  const insets = useSafeAreaInsets();
 
   // Accessibility state
   const [isScreenReaderActive, setIsScreenReaderActive] = useState(false);
@@ -456,33 +458,34 @@ export function DeviceProvisioningWizard({
 
         {/* Navigation Controls */}
         <View
-          style={styles.navigationContainer}
+          style={[
+            styles.navigationContainer,
+            { paddingBottom: spacing.lg + insets.bottom }
+          ]}
           accessibilityLabel="Controles de navegación del asistente"
         >
           <View style={styles.navigationButtons}>
-            {!isFirstStep && (
-              <Button
-                onPress={handleBack}
-                variant="secondary"
-                size="lg"
-                style={[styles.navButton, styles.accessibleButton]}
-                accessibilityLabel={`Paso anterior: ${STEP_LABELS[wizardState.currentStep - 1]}`}
-                accessibilityHint="Regresa al paso anterior del formulario. También puedes usar la tecla de flecha izquierda"
-              >
-                Atrás
-              </Button>
-            )}
-
-            {isFirstStep && (
+            {isFirstStep ? (
               <Button
                 onPress={handleExit}
-                variant="secondary"
-                size="lg"
-                style={[styles.navButton, styles.accessibleButton]}
+                variant="ghost"
+                size="md"
+                style={[styles.linkButton, styles.accessibleButton]}
                 accessibilityLabel="Cancelar configuración"
                 accessibilityHint="Cancela y sale del formulario de configuración. También puedes usar la tecla Escape"
               >
                 Cancelar
+              </Button>
+            ) : (
+              <Button
+                onPress={handleBack}
+                variant="ghost"
+                size="md"
+                style={[styles.linkButton, styles.accessibleButton]}
+                accessibilityLabel={`Paso anterior: ${STEP_LABELS[wizardState.currentStep - 1]}`}
+                accessibilityHint="Regresa al paso anterior del formulario. También puedes usar la tecla de flecha izquierda"
+              >
+                Atrás
               </Button>
             )}
 
@@ -491,8 +494,9 @@ export function DeviceProvisioningWizard({
                 onPress={handleNext}
                 variant="primary"
                 size="lg"
+                fullWidth
                 disabled={!wizardState.canProceed}
-                style={[styles.navButton, styles.accessibleButton]}
+                style={[styles.primaryButton, styles.accessibleButton]}
                 accessibilityLabel={`Siguiente paso: ${STEP_LABELS[wizardState.currentStep + 1]}`}
                 accessibilityHint={
                   wizardState.canProceed
@@ -509,9 +513,10 @@ export function DeviceProvisioningWizard({
                 onPress={handleComplete}
                 variant="primary"
                 size="lg"
+                fullWidth
                 disabled={!wizardState.canProceed}
                 loading={wizardState.isSubmitting}
-                style={[styles.navButton, styles.accessibleButton]}
+                style={[styles.primaryButton, styles.accessibleButton]}
                 accessibilityLabel="Completar configuración del dispositivo"
                 accessibilityHint="Finaliza la configuración y guarda todos los ajustes. También puedes usar la tecla Enter"
               >
@@ -625,6 +630,7 @@ const styles = StyleSheet.create({
   },
   stepContent: {
     flex: 1,
+    paddingTop: spacing.md,
   },
   stepPlaceholder: {
     flex: 1,
@@ -632,23 +638,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   progressWrapper: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
     backgroundColor: 'transparent',
   },
   navigationContainer: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.05)',
-    paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.lg,
   },
   navigationButtons: {
-    flexDirection: 'row',
+    width: '100%',
+    flexDirection: 'column',
     gap: spacing.md,
   },
-  navButton: {
-    flex: 1,
+  linkButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+  },
+  primaryButton: {
     borderRadius: borderRadius.full, // Pill shaped buttons
   },
   // Ensure buttons meet minimum touch target size (44x44)

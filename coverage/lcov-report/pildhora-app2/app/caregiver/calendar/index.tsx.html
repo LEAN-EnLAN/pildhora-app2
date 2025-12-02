@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/120</span>
+                <span class='fraction'>0/125</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/67</span>
+                <span class='fraction'>0/55</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/23</span>
+                <span class='fraction'>0/24</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/103</span>
+                <span class='fraction'>0/107</span>
             </div>
         
             
@@ -374,18 +374,7 @@
 <a name='L309'></a><a href='#L309'>309</a>
 <a name='L310'></a><a href='#L310'>310</a>
 <a name='L311'></a><a href='#L311'>311</a>
-<a name='L312'></a><a href='#L312'>312</a>
-<a name='L313'></a><a href='#L313'>313</a>
-<a name='L314'></a><a href='#L314'>314</a>
-<a name='L315'></a><a href='#L315'>315</a>
-<a name='L316'></a><a href='#L316'>316</a>
-<a name='L317'></a><a href='#L317'>317</a>
-<a name='L318'></a><a href='#L318'>318</a>
-<a name='L319'></a><a href='#L319'>319</a>
-<a name='L320'></a><a href='#L320'>320</a>
-<a name='L321'></a><a href='#L321'>321</a>
-<a name='L322'></a><a href='#L322'>322</a>
-<a name='L323'></a><a href='#L323'>323</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L312'></a><a href='#L312'>312</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -453,22 +442,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -489,9 +467,15 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -520,12 +504,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -711,12 +689,12 @@
 import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSelector } from 'react-redux';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { collection, query, where, orderBy, getFirestore } from 'firebase/firestore';
+import { collection, query, where, orderBy } from 'firebase/firestore';
 &nbsp;
 import { RootState } from '../../../src/store';
-import { MedicationEvent, Medication } from '../../../src/types';
+import { IntakeRecord, IntakeStatus } from '../../../src/types';
 import { ScreenWrapper } from '../../../src/components/caregiver';
 import { Container } from '../../../src/components/ui';
 import { CalendarView } from '../../../src/components/caregiver/calendar/CalendarView';
@@ -772,49 +750,44 @@ export default function <span class="fstat-no" title="function not covered" >Cal
       // Given the previous implementation, let's try to filter by date if possible, 
       // or fetch a reasonable amount and filter client-side.
       
-      // Note: Firestore range queries on 'timestamp' are good.
-      // But we need to filter by patientId IN [...] which requires a specific index with timestamp.
-      // If we don't have that index, we might need to query per patient or just fetch last N events.
-      // Let's assume we can fetch by patientId (if single) or just fetch all for caregiver's patients.
-      
-      // For simplicity and to ensure we get data, let's use the existing pattern of fetching by patientId
-      // If multiple patients, we might need multiple queries or a composite query.
-      // Let's assume we select the first patient or aggregate.
-      // The dashboard selected a patient. Here, the calendar should probably show ALL or allow selection.
-      // User said: "comprehensive calendar system".
-      // Let's query events for all linked patients.
+      // Query intakeRecords for adherence tracking
+      // intakeRecords have status field (taken, missed, skipped, pending)
       
       const patientIds = <span class="cstat-no" title="statement not covered" >patients.map(<span class="fstat-no" title="function not covered" >p </span>=&gt; <span class="cstat-no" title="statement not covered" >p.id)</span>;</span>
 <span class="cstat-no" title="statement not covered" >      if (patientIds.length === 0) <span class="cstat-no" title="statement not covered" >return;</span></span>
 &nbsp;
-      // Querying with 'in' operator for patientId and range for timestamp requires index.
-      // Fallback: Query by patientId 'in' and client-side filter for date, limit to reasonable number (e.g. 500)
+      // Querying with 'in' operator for patientId - limit to 10 patients for Firestore 'in' query limit
 <span class="cstat-no" title="statement not covered" >      setEventsQuery(query(</span>
-        collection(db, 'medicationEvents'),
-        where('patientId', 'in', patientIds.slice(0, 10)), // Limit to 10 patients for 'in' query limit
-        orderBy('timestamp', 'desc'),
-        // limit(500) // Fetch enough for the month
+        collection(db, 'intakeRecords'),
+        where('patientId', 'in', patientIds.slice(0, 10)),
+        orderBy('scheduledTime', 'desc'),
       ));
     };
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    buildQuery();</span>
   }, [user?.id, patients, currentDate]); // Re-build if month changes? No, just fetch all and filter client side for now to be safe.
 &nbsp;
-  const { data: allEvents = <span class="branch-0 cbranch-no" title="branch not covered" >[],</span> isLoading: eventsLoading, error: eventsError, mutate } = <span class="cstat-no" title="statement not covered" >useCollectionSWR&lt;MedicationEvent&gt;({</span>
-    cacheKey: `calendar_events:${user?.id}:${monthRange.start.getTime()}`, // Update cache key when month changes
+  const { data: allRecords = <span class="branch-0 cbranch-no" title="branch not covered" >[],</span> isLoading: eventsLoading, error: eventsError, mutate } = <span class="cstat-no" title="statement not covered" >useCollectionSWR&lt;IntakeRecord&gt;({</span>
+    cacheKey: `calendar_intake:${user?.id}:${monthRange.start.getTime()}`,
     query: eventsQuery,
     initialData: [],
     realtime: true,
   });
 &nbsp;
-  // Filter events for the displayed month and selected date
-  const { monthEvents, selectedDayEvents } = <span class="cstat-no" title="statement not covered" >useMemo(<span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
+  // Helper to get timestamp from IntakeRecord
+  const getRecordTimestamp = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(r</span>ecord: IntakeRecord): number =&gt; {</span>
+    const ts = <span class="cstat-no" title="statement not covered" >record.scheduledTime;</span>
+<span class="cstat-no" title="statement not covered" >    if (ts instanceof Object &amp;&amp; 'toMillis' in ts) <span class="cstat-no" title="statement not covered" >return (ts as any).toMillis();</span></span>
+<span class="cstat-no" title="statement not covered" >    return new Date(ts as string | Date).getTime();</span>
+  };
+&nbsp;
+  // Filter records for the displayed month and selected date
+  const { monthRecords, selectedDayRecords } = <span class="cstat-no" title="statement not covered" >useMemo(<span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
     const monthStart = <span class="cstat-no" title="statement not covered" >monthRange.start.getTime();</span>
     const monthEnd = <span class="cstat-no" title="statement not covered" >monthRange.end.getTime();</span>
     
-    const mEvents = <span class="cstat-no" title="statement not covered" >allEvents.filter(<span class="fstat-no" title="function not covered" >e </span>=&gt; {</span>
-      // Handle timestamp: Firestore Timestamp or number/string
-      const ts = <span class="cstat-no" title="statement not covered" >e.timestamp instanceof Object &amp;&amp; 'toMillis' in e.timestamp ? e.timestamp.toMillis() : new Date(e.timestamp).getTime();</span>
+    const mRecords = <span class="cstat-no" title="statement not covered" >allRecords.filter(<span class="fstat-no" title="function not covered" >r </span>=&gt; {</span>
+      const ts = <span class="cstat-no" title="statement not covered" >getRecordTimestamp(r);</span>
 <span class="cstat-no" title="statement not covered" >      return ts &gt;= monthStart &amp;&amp; ts &lt;= monthEnd;</span>
     });
 &nbsp;
@@ -823,39 +796,33 @@ export default function <span class="fstat-no" title="function not covered" >Cal
     const selectedEnd = <span class="cstat-no" title="statement not covered" >new Date(selectedDate);</span>
 <span class="cstat-no" title="statement not covered" >    selectedEnd.setHours(23, 59, 59, 999);</span>
 &nbsp;
-    const dEvents = <span class="cstat-no" title="statement not covered" >allEvents.filter(<span class="fstat-no" title="function not covered" >e </span>=&gt; {</span>
-      const ts = <span class="cstat-no" title="statement not covered" >e.timestamp instanceof Object &amp;&amp; 'toMillis' in e.timestamp ? e.timestamp.toMillis() : new Date(e.timestamp).getTime();</span>
+    const dRecords = <span class="cstat-no" title="statement not covered" >allRecords.filter(<span class="fstat-no" title="function not covered" >r </span>=&gt; {</span>
+      const ts = <span class="cstat-no" title="statement not covered" >getRecordTimestamp(r);</span>
 <span class="cstat-no" title="statement not covered" >      return ts &gt;= selectedStart.getTime() &amp;&amp; ts &lt;= selectedEnd.getTime();</span>
     });
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    return { monthEvents: mEvents, selectedDayEvents: dEvents };</span>
-  }, [allEvents, monthRange, selectedDate]);
+<span class="cstat-no" title="statement not covered" >    return { monthRecords: mRecords, selectedDayRecords: dRecords };</span>
+  }, [allRecords, monthRange, selectedDate]);
 &nbsp;
   // Calculate Adherence Data for dots
   const adherenceData = <span class="cstat-no" title="statement not covered" >useMemo(<span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
     const data: Record&lt;string, { status: 'complete' | 'partial' | 'missed' | 'none' }&gt; = <span class="cstat-no" title="statement not covered" >{};</span>
     
-    // Group events by day
-    const eventsByDay: Record&lt;string, MedicationEvent[]&gt; = <span class="cstat-no" title="statement not covered" >{};</span>
-<span class="cstat-no" title="statement not covered" >    monthEvents.forEach(<span class="fstat-no" title="function not covered" >e </span>=&gt; {</span>
-      const ts = <span class="cstat-no" title="statement not covered" >e.timestamp instanceof Object &amp;&amp; 'toMillis' in e.timestamp ? e.timestamp.toMillis() : e.timestamp</span>
+    // Group records by day
+    const recordsByDay: Record&lt;string, IntakeRecord[]&gt; = <span class="cstat-no" title="statement not covered" >{};</span>
+<span class="cstat-no" title="statement not covered" >    monthRecords.forEach(<span class="fstat-no" title="function not covered" >r </span>=&gt; {</span>
+      const ts = <span class="cstat-no" title="statement not covered" >getRecordTimestamp(r);</span>
       const dateStr = <span class="cstat-no" title="statement not covered" >format(new Date(ts), 'yyyy-MM-dd');</span>
-<span class="cstat-no" title="statement not covered" >      if (!eventsByDay[dateStr]) <span class="cstat-no" title="statement not covered" >eventsByDay[dateStr] = [];</span></span>
-<span class="cstat-no" title="statement not covered" >      eventsByDay[dateStr].push(e);</span>
+<span class="cstat-no" title="statement not covered" >      if (!recordsByDay[dateStr]) <span class="cstat-no" title="statement not covered" >recordsByDay[dateStr] = [];</span></span>
+<span class="cstat-no" title="statement not covered" >      recordsByDay[dateStr].push(r);</span>
     });
 &nbsp;
-    // Determine status for each day (Simplified logic)
-    // "complete": All scheduled taken (requires medication schedule, which we don't have easily here without fetching all meds)
-    // For now, let's use a heuristic based on event types:
-    // If any 'missed' event -&gt; 'missed' or 'partial'
-    // If only 'taken' -&gt; 'complete'
-    // If 'skipped' -&gt; 'partial'
-    
-<span class="cstat-no" title="statement not covered" >    Object.keys(eventsByDay).forEach(<span class="fstat-no" title="function not covered" >da</span>teStr =&gt; {</span>
-      const dayEvents = <span class="cstat-no" title="statement not covered" >eventsByDay[dateStr];</span>
-      const hasMissed = <span class="cstat-no" title="statement not covered" >dayEvents.some(<span class="fstat-no" title="function not covered" >e </span>=&gt; <span class="cstat-no" title="statement not covered" >e.status === 'missed')</span>;</span>
-      const hasSkipped = <span class="cstat-no" title="statement not covered" >dayEvents.some(<span class="fstat-no" title="function not covered" >e </span>=&gt; <span class="cstat-no" title="statement not covered" >e.status === 'skipped')</span>;</span>
-      const hasTaken = <span class="cstat-no" title="statement not covered" >dayEvents.some(<span class="fstat-no" title="function not covered" >e </span>=&gt; <span class="cstat-no" title="statement not covered" >e.status === 'taken')</span>;</span>
+    // Determine status for each day based on IntakeStatus
+<span class="cstat-no" title="statement not covered" >    Object.keys(recordsByDay).forEach(<span class="fstat-no" title="function not covered" >da</span>teStr =&gt; {</span>
+      const dayRecords = <span class="cstat-no" title="statement not covered" >recordsByDay[dateStr];</span>
+      const hasMissed = <span class="cstat-no" title="statement not covered" >dayRecords.some(<span class="fstat-no" title="function not covered" >r </span>=&gt; <span class="cstat-no" title="statement not covered" >r.status === IntakeStatus.MISSED)</span>;</span>
+      const hasSkipped = <span class="cstat-no" title="statement not covered" >dayRecords.some(<span class="fstat-no" title="function not covered" >r </span>=&gt; <span class="cstat-no" title="statement not covered" >r.status === IntakeStatus.SKIPPED)</span>;</span>
+      const hasTaken = <span class="cstat-no" title="statement not covered" >dayRecords.some(<span class="fstat-no" title="function not covered" >r </span>=&gt; <span class="cstat-no" title="statement not covered" >r.status === IntakeStatus.TAKEN)</span>;</span>
 &nbsp;
       let status: 'complete' | 'partial' | 'missed' | 'none' = <span class="cstat-no" title="statement not covered" >'none';</span>
       
@@ -867,7 +834,7 @@ export default function <span class="fstat-no" title="function not covered" >Cal
     });
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    return data;</span>
-  }, [monthEvents]);
+  }, [monthRecords]);
 &nbsp;
   // Calculate Selected Day Stats
   const selectedDayStats = <span class="cstat-no" title="statement not covered" >useMemo(<span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
@@ -875,19 +842,19 @@ export default function <span class="fstat-no" title="function not covered" >Cal
     let missed = <span class="cstat-no" title="statement not covered" >0;</span>
     let skipped = <span class="cstat-no" title="statement not covered" >0;</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    selectedDayEvents.forEach(<span class="fstat-no" title="function not covered" >e </span>=&gt; {</span>
-<span class="cstat-no" title="statement not covered" >      if (e.status === 'taken') <span class="cstat-no" title="statement not covered" >taken++;</span></span>
-<span class="cstat-no" title="statement not covered" >      if (e.status === 'missed') <span class="cstat-no" title="statement not covered" >missed++;</span></span>
-<span class="cstat-no" title="statement not covered" >      if (e.status === 'skipped') <span class="cstat-no" title="statement not covered" >skipped++;</span></span>
+<span class="cstat-no" title="statement not covered" >    selectedDayRecords.forEach(<span class="fstat-no" title="function not covered" >r </span>=&gt; {</span>
+<span class="cstat-no" title="statement not covered" >      if (r.status === IntakeStatus.TAKEN) <span class="cstat-no" title="statement not covered" >taken++;</span></span>
+<span class="cstat-no" title="statement not covered" >      if (r.status === IntakeStatus.MISSED) <span class="cstat-no" title="statement not covered" >missed++;</span></span>
+<span class="cstat-no" title="statement not covered" >      if (r.status === IntakeStatus.SKIPPED) <span class="cstat-no" title="statement not covered" >skipped++;</span></span>
     });
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    return {</span>
       taken,
       missed,
       skipped,
-      total: taken + missed + skipped // Only counts recorded events
+      total: taken + missed + skipped
     };
-  }, [selectedDayEvents]);
+  }, [selectedDayRecords]);
 &nbsp;
   // Calculate Weekly Stats for AdherenceChart
   const weeklyStats = <span class="cstat-no" title="statement not covered" >useMemo(<span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
@@ -902,13 +869,13 @@ export default function <span class="fstat-no" title="function not covered" >Cal
       const dayStart = <span class="cstat-no" title="statement not covered" >day.getTime();</span>
       const dayEnd = <span class="cstat-no" title="statement not covered" >new Date(day).setHours(23, 59, 59, 999);</span>
 &nbsp;
-      const dayEvents = <span class="cstat-no" title="statement not covered" >allEvents.filter(<span class="fstat-no" title="function not covered" >e </span>=&gt; {</span>
-        const ts = <span class="cstat-no" title="statement not covered" >e.timestamp instanceof Object &amp;&amp; 'toMillis' in e.timestamp ? e.timestamp.toMillis() : new Date(e.timestamp).getTime();</span>
+      const dayRecords = <span class="cstat-no" title="statement not covered" >allRecords.filter(<span class="fstat-no" title="function not covered" >r </span>=&gt; {</span>
+        const ts = <span class="cstat-no" title="statement not covered" >getRecordTimestamp(r);</span>
 <span class="cstat-no" title="statement not covered" >        return ts &gt;= dayStart &amp;&amp; ts &lt;= dayEnd;</span>
       });
 &nbsp;
-      const taken = <span class="cstat-no" title="statement not covered" >dayEvents.filter(<span class="fstat-no" title="function not covered" >e </span>=&gt; <span class="cstat-no" title="statement not covered" >e.status === 'taken')</span>.length;</span>
-      const total = <span class="cstat-no" title="statement not covered" >dayEvents.length;</span>
+      const taken = <span class="cstat-no" title="statement not covered" >dayRecords.filter(<span class="fstat-no" title="function not covered" >r </span>=&gt; <span class="cstat-no" title="statement not covered" >r.status === IntakeStatus.TAKEN)</span>.length;</span>
+      const total = <span class="cstat-no" title="statement not covered" >dayRecords.length;</span>
       
       const isFuture = <span class="cstat-no" title="statement not covered" >day &gt; now;</span>
       
@@ -935,7 +902,7 @@ export default function <span class="fstat-no" title="function not covered" >Cal
         dateStr
       };
     });
-  }, [selectedDate, allEvents]);
+  }, [selectedDate, allRecords]);
 &nbsp;
   const handleRefresh = <span class="cstat-no" title="statement not covered" >useCallback(<span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >    setRefreshing(true);</span>
@@ -943,15 +910,15 @@ export default function <span class="fstat-no" title="function not covered" >Cal
 <span class="cstat-no" title="statement not covered" >    setRefreshing(false);</span>
   }, [mutate]);
 &nbsp;
-  const handleEventPress = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(e</span>vent: MedicationEvent) =&gt; {</span>
+  const handleRecordPress = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(r</span>ecord: IntakeRecord) =&gt; {</span>
     // Navigate to medication detail if patientId and medicationId are present
-<span class="cstat-no" title="statement not covered" >    if (event.patientId &amp;&amp; event.medicationId) {</span>
+<span class="cstat-no" title="statement not covered" >    if (record.patientId &amp;&amp; record.medicationId) {</span>
 <span class="cstat-no" title="statement not covered" >      router.push({</span>
         pathname: '/caregiver/medications/[patientId]/[id]',
-        params: { patientId: event.patientId, id: event.medicationId }
+        params: { patientId: record.patientId, id: record.medicationId }
       });
     } else {
-<span class="cstat-no" title="statement not covered" >      console.warn('Event missing patientId or medicationId', event);</span>
+<span class="cstat-no" title="statement not covered" >      console.warn('Record missing patientId or medicationId', record);</span>
     }
   };
 &nbsp;
@@ -993,17 +960,17 @@ export default function <span class="fstat-no" title="function not covered" >Cal
           &lt;View style={styles.chartContainer}&gt;
             &lt;AdherenceChart 
               weeklyStats={weeklyStats} 
-              loading={eventsLoading &amp;&amp; !allEvents.length} 
+              loading={eventsLoading &amp;&amp; !allRecords.length} 
             /&gt;
           &lt;/View&gt;
 &nbsp;
           &lt;View style={styles.detailContainer}&gt;
             &lt;DayDetail
               date={selectedDate}
-              events={selectedDayEvents}
+              records={selectedDayRecords}
               stats={selectedDayStats}
-              loading={eventsLoading &amp;&amp; !allEvents.length}
-              onEventPress={handleEventPress}
+              loading={eventsLoading &amp;&amp; !allRecords.length}
+              onRecordPress={handleRecordPress}
             /&gt;
           &lt;/View&gt;
         &lt;/ScrollView&gt;
@@ -1036,7 +1003,7 @@ const styles = <span class="cstat-no" title="statement not covered" >StyleSheet.
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-27T05:07:49.888Z
+                at 2025-12-02T06:06:36.767Z
             </div>
         <script src="../../../../prettify.js"></script>
         <script>

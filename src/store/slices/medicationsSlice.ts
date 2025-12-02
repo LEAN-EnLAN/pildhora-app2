@@ -790,7 +790,11 @@ const medicationsSlice = createSlice({
       })
       .addCase(addMedication.fulfilled, (state, action) => {
         state.loading = false;
-        state.medications.unshift(action.payload);
+        // Check if medication already exists (could happen with real-time subscription)
+        const exists = state.medications.some(med => med.id === action.payload.id);
+        if (!exists) {
+          state.medications.unshift(action.payload);
+        }
       })
       .addCase(addMedication.rejected, (state, action) => {
         state.loading = false;

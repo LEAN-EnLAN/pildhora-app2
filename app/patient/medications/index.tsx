@@ -53,12 +53,24 @@ export default function MedicationsIndex() {
     setRefreshing(false);
   }, [patientId, dispatch]);
 
+  // Deduplicate medications by ID to prevent duplicate key errors
+  const uniqueMedications = useMemo(() => {
+    const seen = new Set<string>();
+    return medications.filter(med => {
+      if (seen.has(med.id)) {
+        return false;
+      }
+      seen.add(med.id);
+      return true;
+    });
+  }, [medications]);
+
   const stats = useMemo(() => {
-    const total = medications.length;
-    const withAlarms = medications.filter(m => m.times && m.times.length > 0).length;
+    const total = uniqueMedications.length;
+    const withAlarms = uniqueMedications.filter(m => m.times && m.times.length > 0).length;
     const lowStock = lowInventoryMeds.size;
     return { total, withAlarms, lowStock };
-  }, [medications, lowInventoryMeds]);
+  }, [uniqueMedications, lowInventoryMeds]);
 
   const renderMedicationItem = useCallback(({ item }: { item: Medication }) => {
     const showLowBadge = lowInventoryMeds.has(item.id);
@@ -164,11 +176,11 @@ export default function MedicationsIndex() {
         onRightActionPress={() => router.push('/patient/medications/add')}
       />
       <FlatList
-        data={medications}
+        data={uniqueMedications}
         keyExtractor={(item) => item.id}
         renderItem={renderMedicationItem}
         contentContainerStyle={styles.listContent}
-        ListHeaderComponent={medications.length > 0 ? renderHeader : null}
+        ListHeaderComponent={uniqueMedications.length > 0 ? renderHeader : null}
         ListEmptyComponent={renderEmptyState}
         refreshControl={
           <RefreshControl

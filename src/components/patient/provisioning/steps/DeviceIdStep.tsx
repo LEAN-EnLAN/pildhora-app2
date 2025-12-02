@@ -51,9 +51,9 @@ export function DeviceIdStep() {
       return 'El ID no puede tener más de 100 caracteres';
     }
 
-    // Check for invalid characters (allow alphanumeric, hyphens, underscores)
-    if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
-      return 'El ID solo puede contener letras, números, guiones y guiones bajos';
+    // Check for invalid characters (allow alphanumeric, hyphens, underscores, and hash)
+    if (!/^[a-zA-Z0-9_\-#]+$/.test(id)) {
+      return 'El ID solo puede contener letras, números, guiones, guiones bajos y el símbolo #';
     }
 
     return null;

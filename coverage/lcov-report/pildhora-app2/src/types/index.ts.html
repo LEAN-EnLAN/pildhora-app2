@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/2</span>
+                <span class='fraction'>2/2</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/2</span>
+                <span class='fraction'>2/2</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -1634,7 +1634,21 @@
 <a name='L1569'></a><a href='#L1569'>1569</a>
 <a name='L1570'></a><a href='#L1570'>1570</a>
 <a name='L1571'></a><a href='#L1571'>1571</a>
-<a name='L1572'></a><a href='#L1572'>1572</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L1572'></a><a href='#L1572'>1572</a>
+<a name='L1573'></a><a href='#L1573'>1573</a>
+<a name='L1574'></a><a href='#L1574'>1574</a>
+<a name='L1575'></a><a href='#L1575'>1575</a>
+<a name='L1576'></a><a href='#L1576'>1576</a>
+<a name='L1577'></a><a href='#L1577'>1577</a>
+<a name='L1578'></a><a href='#L1578'>1578</a>
+<a name='L1579'></a><a href='#L1579'>1579</a>
+<a name='L1580'></a><a href='#L1580'>1580</a>
+<a name='L1581'></a><a href='#L1581'>1581</a>
+<a name='L1582'></a><a href='#L1582'>1582</a>
+<a name='L1583'></a><a href='#L1583'>1583</a>
+<a name='L1584'></a><a href='#L1584'>1584</a>
+<a name='L1585'></a><a href='#L1585'>1585</a>
+<a name='L1586'></a><a href='#L1586'>1586</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1770,7 +1784,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1811,7 +1825,21 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -3341,7 +3369,7 @@ export interface Medication {
  * console.log(selectedUnit?.label); // "mg (miligramos)"
  * ```
  */
-export const DOSE_UNITS = <span class="cstat-no" title="statement not covered" >[</span>
+export const DOSE_UNITS = [
   { id: 'mg', label: 'mg (miligramos)' },
   { id: 'g', label: 'g (gramos)' },
   { id: 'mcg', label: 'mcg (microgramos)' },
@@ -3382,7 +3410,7 @@ export type DoseUnit = typeof DOSE_UNITS[number];
  * console.log(selectedType?.icon); // "medkit-outline"
  * ```
  */
-export const QUANTITY_TYPES = <span class="cstat-no" title="statement not covered" >[</span>
+export const QUANTITY_TYPES = [
   { id: 'tablets', label: 'Tabletas', icon: 'medkit-outline' },
   { id: 'capsules', label: 'Cápsulas', icon: 'medkit-outline' },
   { id: 'liquid', label: 'Líquido', icon: 'flask-outline' },
@@ -3632,7 +3660,7 @@ export interface IntakeRecord {
   dosage: string;
   /** Scheduled time for this dose. Can be Date object or ISO string after Firestore conversion */
   scheduledTime: Date | string;
-  /** Current status of the dose (pending, taken, or missed) */
+  /** Current status of the dose (pending, taken, missed, or skipped) */
   status: IntakeStatus;
   /** ID of the patient this intake record belongs to */
   patientId: string;
@@ -3646,6 +3674,20 @@ export interface IntakeRecord {
   deviceSource?: 'manual' | 'pillbox';
   /** ID of the caregiver for scoping (if managed by caregiver) */
   caregiverId?: string;
+  /** Device ID that recorded this intake */
+  deviceId?: string;
+  /** Whether this intake was triggered by a topo alarm */
+  topoTriggered?: boolean;
+  /** Timestamp when topo alarm was triggered. Can be Date object or ISO string */
+  topoTriggeredAt?: Date | string;
+  /** Timestamp when the intake was completed (taken or missed). Can be Date object or ISO string */
+  completedAt?: Date | string;
+  /** How the intake was completed (app button, device button, timeout, etc.) */
+  completedBy?: 'app' | 'device_button' | 'timeout' | 'manual';
+  /** Whether this was recorded in autonomous mode */
+  isAutonomous?: boolean;
+  /** Timestamp when the record was created. Can be Date object or ISO string */
+  createdAt?: Date | string;
 }
 &nbsp;
 // ============================================================================
@@ -4783,7 +4825,7 @@ export interface OfflineMedicationChange {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-27T05:07:49.888Z
+                at 2025-12-02T06:06:36.767Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

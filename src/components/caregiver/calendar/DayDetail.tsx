@@ -1,15 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Ionicons } from '@expo/vector-icons';
-import { MedicationEvent } from '../../../types';
-import { MedicationEventCard } from '../MedicationEventCard';
+import { IntakeRecord, IntakeStatus } from '../../../types';
 import { colors, spacing, typography, borderRadius, shadows } from '../../../theme/tokens';
 
 interface DayDetailProps {
   date: Date;
-  events: MedicationEvent[];
+  records: IntakeRecord[];
   stats: {
     taken: number;
     missed: number;
@@ -17,15 +16,87 @@ interface DayDetailProps {
     total: number;
   };
   loading?: boolean;
-  onEventPress: (event: MedicationEvent) => void;
+  onRecordPress: (record: IntakeRecord) => void;
 }
+
+// Helper to get status color
+const getStatusColor = (status: IntakeStatus): string => {
+  switch (status) {
+    case IntakeStatus.TAKEN: return colors.success[500];
+    case IntakeStatus.MISSED: return colors.error[500];
+    case IntakeStatus.SKIPPED: return colors.warning[500];
+    case IntakeStatus.PENDING: return colors.gray[400];
+    default: return colors.gray[400];
+  }
+};
+
+// Helper to get status label
+const getStatusLabel = (status: IntakeStatus): string => {
+  switch (status) {
+    case IntakeStatus.TAKEN: return 'Tomada';
+    case IntakeStatus.MISSED: return 'Olvidada';
+    case IntakeStatus.SKIPPED: return 'Saltada';
+    case IntakeStatus.PENDING: return 'Pendiente';
+    default: return 'Desconocido';
+  }
+};
+
+// Helper to get status icon
+const getStatusIcon = (status: IntakeStatus): string => {
+  switch (status) {
+    case IntakeStatus.TAKEN: return 'checkmark-circle';
+    case IntakeStatus.MISSED: return 'close-circle';
+    case IntakeStatus.SKIPPED: return 'remove-circle';
+    case IntakeStatus.PENDING: return 'time';
+    default: return 'help-circle';
+  }
+};
+
+// Intake Record Card Component
+const IntakeRecordCard: React.FC<{ record: IntakeRecord; onPress: () => void }> = ({ record, onPress }) => {
+  const scheduledTime = record.scheduledTime instanceof Object && 'toDate' in record.scheduledTime
+    ? (record.scheduledTime as any).toDate()
+    : new Date(record.scheduledTime as string | Date);
+
+  return (
+    <TouchableOpacity 
+      style={styles.recordCard} 
+      onPress={onPress}
+      accessibilityLabel={`${record.medicationName}, ${getStatusLabel(record.status)}`}
+      accessibilityHint="Toca para ver detalles del medicamento"
+    >
+      <View style={styles.recordHeader}>
+        <View style={styles.recordInfo}>
+          <Text style={styles.medicationName}>{record.medicationName}</Text>
+          <Text style={styles.dosageText}>{record.dosage}</Text>
+        </View>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(record.status) + '20' }]}>
+          <Ionicons 
+            name={getStatusIcon(record.status) as any} 
+            size={16} 
+            color={getStatusColor(record.status)} 
+          />
+          <Text style={[styles.statusText, { color: getStatusColor(record.status) }]}>
+            {getStatusLabel(record.status)}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.recordFooter}>
+        <Ionicons name="time-outline" size={14} color={colors.gray[400]} />
+        <Text style={styles.timeText}>
+          {format(scheduledTime, 'HH:mm')}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 export const DayDetail: React.FC<DayDetailProps> = ({
   date,
-  events,
+  records,
   stats,
   loading = false,
-  onEventPress,
+  onRecordPress,
 }) => {
   const renderHeader = () => (
     <View style={styles.header}>
@@ -62,7 +133,7 @@ export const DayDetail: React.FC<DayDetailProps> = ({
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
       <Ionicons name="calendar-outline" size={48} color={colors.gray[300]} />
-      <Text style={styles.emptyText}>No hay eventos para este día</Text>
+      <Text style={styles.emptyText}>No hay registros para este día</Text>
     </View>
   );
 
@@ -71,7 +142,7 @@ export const DayDetail: React.FC<DayDetailProps> = ({
       <View style={styles.container}>
         {renderHeader()}
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Cargando eventos...</Text>
+          <Text style={styles.loadingText}>Cargando registros...</Text>
         </View>
       </View>
     );
@@ -81,11 +152,11 @@ export const DayDetail: React.FC<DayDetailProps> = ({
     <View style={styles.container}>
       {renderHeader()}
       <FlatList
-        data={events}
+        data={records}
         renderItem={({ item }) => (
-          <MedicationEventCard 
-            event={item} 
-            onPress={() => onEventPress(item)} 
+          <IntakeRecordCard 
+            record={item} 
+            onPress={() => onRecordPress(item)} 
           />
         )}
         keyExtractor={(item) => item.id}
@@ -164,6 +235,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
+    color: colors.gray[500],
+  },
+  // IntakeRecordCard styles
+  recordCard: {
+    backgroundColor: 'white',
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    ...shadows.sm,
+  },
+  recordHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
+  },
+  recordInfo: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  medicationName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray[900],
+    marginBottom: 2,
+  },
+  dosageText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.gray[600],
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    gap: 4,
+  },
+  statusText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+  },
+  recordFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  timeText: {
+    fontSize: typography.fontSize.sm,
     color: colors.gray[500],
   },
 });
